@@ -165,7 +165,7 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
 
 ## Changelog
 
-### 2026-08-12 — v5.11: Bug Fixes, Balance & New Features
+### 2026-08-14 — v5.11: Bug Fixes, Balance & New Features
 - **Crash Fix (`stealth_nvg.script`):** Fixed a fatal error (`FATAL ERROR... item not found, id`) that occurred when an NPC without a valid character profile spawned.
 - **Balance - NPC Vision & Accuracy (`m_stalker.ltx`):** Tuned vision parameters (FOV, detection time, etc.) and weapon dispersion to create more fair and tactical combat.
 - **Balance - Immunity Progression (`m_stalker.ltx`, `m_stalker_zombied.ltx`):** Reworked immunities for stalker ranks and zombified for a clearer difficulty curve and fixed an invulnerability bug.
