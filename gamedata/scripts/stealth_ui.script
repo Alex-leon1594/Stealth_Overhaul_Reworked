@@ -74,7 +74,8 @@ function stealth_ui_update()
 	if tg - last_update < 100 then return end        -- Throttle: run at most every 100 ms
 	last_update = tg                                  -- Remember when we last ran
 
-	if not (db.actor and alive(db.actor)) then return end  -- No actor -> nothing to do
+	local actor = db.actor -- Cache db.actor for repeated access
+	if not (actor and alive(actor)) then return end  -- No actor -> nothing to do
 	if not ensure_hud() then return end                     -- Eye not available -> try again later
 
 	if det_eye then det_eye:Show(cfg.icon) end            -- Toggle eye visibility
@@ -93,72 +94,74 @@ function stealth_ui_update()
 		spotted = false                               -- Recompute the line-of-sight state from scratch
 	end
 
-	-- --- Stalker detection pass ------------------------------------------
-	for id in pairs(stealth_noise.online_npcs) do     -- Loop over every tracked NPC id
-		local npc = level.object_by_id(id)            -- Resolve the NPC object by id
-		if not npc then
-			stealth_noise.online_npcs[id] = nil       -- Object gone -> drop it from the registry
-		elseif alive(npc) and IsStalker(npc) and npc:id() ~= AC_ID and not is_ally_of_actor(npc) then  -- Relevant hostile stalker
-			local last_eval = visual_memory_manager.vis_last[id]  -- When this NPC last evaluated the actor
-			if last_eval and tg - last_eval > 250 then
-				-- The NPC is no longer being evaluated (left range / lost interest):
-				-- calm the meter down along the same exponential ease-out curve.
-				local dt = (tg - (calm_last[id] or last_eval)) * 0.001  -- Seconds since the last decay step
-				calm_last[id] = tg                                     -- Remember this step
-				local keep = 0.5 ^ (dt / 2.5)                           -- Halve the value every 2.5 s
-				local acc = (visual_memory_manager.vis_acc[id] or 0) * keep  -- Apply the decay
-				if acc < 0 then acc = 0 end                            -- Never go negative
-				visual_memory_manager.vis_acc[id] = acc                -- Write the decayed value back
-			else
-				calm_last[id] = nil                                    -- Being evaluated again -> reset the decay clock
-			end
+	local AC_ID = actor:id() -- Cache actor ID for comparison
 
-			if npc:position():distance_to_sqr(ap) < 22500 then  -- NPC within 150 m of the actor
-				if see_ok and npc:see(db.actor) then
-					spotted = true                            -- Direct line of sight -> spotted state
+	local to_remove_from_online_npcs = {} -- Collect IDs to remove after iteration
+
+	-- --- Combined NPC detection and monster alert pass -------------------
+	local monster_radius = cfg.monster_alarm_radius  -- MCM: alert radius when a monster spots the actor (0 = off)
+	local monster_dur = cfg.monster_alarm_dur        -- MCM: alarm duration
+
+	for id in pairs(stealth_noise.online_npcs) do     -- Loop over every tracked NPC id
+		local obj = level.object_by_id(id)            -- Resolve the NPC object by id
+
+		if not obj or not alive(obj) then
+			table.insert(to_remove_from_online_npcs, id) -- Mark for removal from online_npcs
+			if monster_seen[id] then
+				monster_seen[id] = nil -- Also remove from monster_seen if it was a monster
+			end
+		else
+			if IsStalker(obj) and obj:id() ~= AC_ID and not is_ally_of_actor(obj) then  -- Relevant hostile stalker
+				local last_eval = visual_memory_manager.vis_last[id]  -- When this NPC last evaluated the actor
+				if last_eval and tg - last_eval > 250 then
+					-- The NPC is no longer being evaluated (left range / lost interest):
+					-- calm the meter down along the same exponential ease-out curve.
+					local dt = (tg - (calm_last[id] or last_eval)) * 0.001  -- Seconds since the last decay step
+					calm_last[id] = tg                                     -- Remember this step
+					local keep = 0.5 ^ (dt / 2.5)                           -- Halve the value every 2.5 s
+					local acc = (visual_memory_manager.vis_acc[id] or 0) * keep  -- Apply the decay
+					if acc < 0 then acc = 0 end                            -- Never go negative
+					visual_memory_manager.vis_acc[id] = acc                -- Write the decayed value back
 				else
-					local acc = visual_memory_manager.vis_acc[id] or 0  -- Current accumulated visibility
-					local thr = npc:visibility_threshold() or 35        -- This NPC's threshold
-					local m = clamp(acc / thr, 0, 1)                    -- Detection fraction 0..1
-					if m > det then det = m end                        -- Track the strongest value
-					local vma = visual_memory_manager.alarm_boost[id]  -- Alarm boost deadline for this NPC
-					if (vma and vma > tg) or stealth_noise.is_suspect(npc) then  -- Alarmed or actively investigating?
-						amber = true                                  -- -> amber (suspicion) state
+					calm_last[id] = nil                                    -- Being evaluated again -> reset the decay clock
+				end
+
+				if obj:position():distance_to_sqr(ap) < 22500 then  -- NPC within 150 m of the actor
+					if see_ok and obj:see(actor) then -- Use cached actor
+						spotted = true                            -- Direct line of sight -> spotted state
+					else
+						local acc = visual_memory_manager.vis_acc[id] or 0  -- Current accumulated visibility
+						local thr = obj:visibility_threshold() or 35        -- This NPC's threshold
+						local m = clamp(acc / thr, 0, 1)                    -- Detection fraction 0..1
+						if m > det then det = m end                        -- Track the strongest value
+						local vma = visual_memory_manager.alarm_boost[id]  -- Alarm boost deadline for this NPC
+						if (vma and vma > tg) or stealth_noise.is_suspect(obj) then  -- Alarmed or actively investigating?
+							amber = true                                  -- -> amber (suspicion) state
+						end
+					end
+				end
+			elseif IsMonster(obj) and obj:id() ~= AC_ID then  -- Relevant monster
+				if see_ok then
+					local sees = obj:see(actor)            -- Does the monster see the actor right now?
+					if sees and not monster_seen[id] then
+						monster_seen[id] = true               -- New sighting -> remember it
+						if monster_radius > 0 then
+							stealth_noise.alarm_nearby(obj, monster_radius, monster_dur)  -- Alert nearby NPCs (radius/duration from MCM)
+						end
+					elseif not sees then
+						monster_seen[id] = nil                -- Lost sight -> forget it
 					end
 				end
 			end
 		end
+	end
+	
+	-- Remove NPCs that are no longer alive or valid from the online_npcs registry
+	for _, id in ipairs(to_remove_from_online_npcs) do
+		stealth_noise.online_npcs[id] = nil
 	end
 
 	if see_ok then seen_any = spotted end              -- Cache the fresh see() result for the next tick
-
-	-- --- Monster alert pass ----------------------------------------------
-	local monster_radius = cfg.monster_alarm_radius  -- MCM: alert radius when a monster spots the actor (0 = off)
-	local monster_dur = cfg.monster_alarm_dur        -- MCM: alarm duration
-	for id in pairs(stealth_noise.online_npcs) do     -- Loop over the registry again
-		local obj = level.object_by_id(id)            -- Resolve the object
-		if not obj then
-			stealth_noise.online_npcs[id] = nil       -- Object gone -> drop it
-		elseif alive(obj) and IsMonster(obj) and obj:id() ~= AC_ID then  -- Relevant monster
-			if see_ok then
-				local sees = obj:see(db.actor)            -- Does the monster see the actor right now?
-				if sees and not monster_seen[id] then
-					monster_seen[id] = true               -- New sighting -> remember it
-					if monster_radius > 0 then
-						stealth_noise.alarm_nearby(obj, monster_radius, monster_dur)  -- Alert nearby NPCs (radius/duration from MCM)
-					end
-				elseif not sees then
-					monster_seen[id] = nil                -- Lost sight -> forget it
-				end
-			end
-		end
-	end
-
-	if tg % 30000 < 100 then                          -- Once every ~30 s
-		for id in pairs(monster_seen) do
-			if not stealth_noise.online_npcs[id] then monster_seen[id] = nil end  -- Forget monsters that left the registry
-		end
-	end
 
 	-- --- Colour the eye --------------------------------------------------
 	local r, g, b
