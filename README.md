@@ -1,4 +1,4 @@
-# Stealth_Overhaul_Reworked_v5.10
+# Stealth_Overhaul_Reworked_v5.11
 
 Complete stealth overhaul for **STALKER Anomaly** (GAMMA-compatible).
 Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full package of new stealth mechanics: noise, detection feedback, silent takedowns and a redesigned detection formula.
@@ -164,6 +164,13 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
 - Outfit noise stats are read from the `noise_k` line in the outfit section (add it to any outfit to make it quieter/louder).
 
 ## Changelog
+
+### 2026-08-12 — v5.11: Bug Fixes, Balance & New Features
+- **Crash Fix (`stealth_nvg.script`):** Fixed a fatal error (`FATAL ERROR... item not found, id`) that occurred when an NPC without a valid character profile spawned.
+- **Balance - NPC Vision & Accuracy (`m_stalker.ltx`):** Tuned vision parameters (FOV, detection time, etc.) and weapon dispersion to create more fair and tactical combat.
+- **Balance - Immunity Progression (`m_stalker.ltx`, `m_stalker_zombied.ltx`):** Reworked immunities for stalker ranks and zombified for a clearer difficulty curve and fixed an invulnerability bug.
+- **Optimization - Noise Calculation (`stealth_noise.script`):** Optimized the footstep noise calculation by caching outfit and artifact multipliers, reducing CPU load.
+- **New Feature - Color-Coded NVG (`stealth_nvg.script`):** The NVG light dot on NPCs' eyes now changes color based on their relation to the player (Green: Ally, Yellow: Neutral, Red: Enemy), providing immediate visual feedback.
 
 ### 2026-08-12 — v5.10: script optimization
 - **Removed redundant script** (`camp_lum.script`): its campfire lighting detection is duplicated — and better implemented — in `visual_memory_manager.script` (throttled to 1 Hz). The `luminocity_inc` variable it defined was not used by any other script.

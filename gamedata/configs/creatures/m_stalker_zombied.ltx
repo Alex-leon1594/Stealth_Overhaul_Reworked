@@ -57,12 +57,12 @@ burn_immunity 				= 0.9			;Factors of immunity
 strike_immunity 			= 0.9
 shock_immunity 				= 0.6
 wound_immunity				= 0.60
-radiation_immunity 			= 0.0
-telepatic_immunity 			= 0.0
+radiation_immunity 			= 0.0  ; Immune to radiation
+telepatic_immunity 			= 0.0  ; Immune to psy-damage
 chemical_burn_immunity 		= 0.65
 explosion_immunity 			= 0.62
 fire_wound_immunity  		= 0.55 
-wound_2_immunity  			= 0.0
+wound_2_immunity  			= 0.60 ; Should be consistent with wound_immunity
 
 [stalker_zombied_movement_speeds]
 ; zombied stalkers can't crouch or run
@@ -266,22 +266,19 @@ mchg_max_queue_size_close		= 30
 mchg_min_queue_interval_close	= 240
 mchg_max_queue_interval_close	= 360
 
-[armed_zombied_immunities]:stalker_immunities
-burn_immunity 				= 0.9			;Factors of immunity
-strike_immunity 			= 0.9
-shock_immunity 				= 0.6
-wound_immunity				= 0.60
-radiation_immunity 			= 0.0
-telepatic_immunity 			= 0.0
-chemical_burn_immunity 		= 0.65
-explosion_immunity 			= 0.62
-fire_wound_immunity  		= 0.55 
-wound_2_immunity  			= 0.0
+[armed_zombied_immunities]:stalker_zombied_immunities
+; Armed zombies are slightly tougher than regular ones, representing remnants of armor.
+burn_immunity 				= 0.85
+strike_immunity 			= 0.85
+shock_immunity 				= 0.55
+wound_immunity				= 0.50
+chemical_burn_immunity 		= 0.60
+explosion_immunity 			= 0.55
+fire_wound_immunity  		= 0.50 
+wound_2_immunity  			= 0.50
 
 [armed_zombied]:stalker_zombied
 $spawn          = "stalkers\armed_zombied"
 fire_queue_section = fire_queue_params_zombied
 immunities_sect	= armed_zombied_immunities
 allow_release   = true
-
-

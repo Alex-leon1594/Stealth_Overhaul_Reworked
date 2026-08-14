@@ -78,12 +78,12 @@ cl_run_fwd_0				=	1,	  0.2,	    1,       0.4,     1
 [stalker_vision_free]
 min_view_distance   		        = 0.15		; min range of cone based on eye_range (fov edge)
 max_view_distance	 		        = 1.01		; max (center of fov, ex.: approx for clear weather and "eye_range = 180" 1.11 = 86m, 2.11 = 133m, 1.75 = 102m)
-visibility_threshold	         	= 80.0		;Threshold in which object becomes visible, visible if (formula * frames(?) = visibility_threshold)
-always_visible_distance 	        = 0.05		;0.5 = 5 meters always visible (ignoring formula)
+visibility_threshold	         	= 75.0		;Threshold in which object becomes visible, visible if (formula * frames(?) = visibility_threshold)
+always_visible_distance 	        = 0.025		;0.5 = 5 meters always visible (ignoring formula)
 time_quant			            	= 0.5		;equation mult for different states and also test for people who overwrite this file
 decrease_value				        = 0.01   	;doesn't seem to do anything
 velocity_factor		            	= 0.35		; 0.35, higher = easier to notice moving objects
-luminocity_factor		        	= 0.75 ;0.3 		;don't change
+luminocity_factor		        	= 0.6 ;0.3 		;don't change
 transparency_threshold	        	= 0.73 		;change if u want (higher = harder to see)
 still_visible_time                  = 0		;NPCs will shoot at target's previous position if they lose vision on it, i.e. they will shoot walls for "still_visible_time" in ms
 
@@ -91,14 +91,14 @@ still_visible_time                  = 0		;NPCs will shoot at target's previous p
 [stalker_vision_danger]
 min_view_distance   	        	= 0.25		; same as above
 max_view_distance	 		        = 1.22		; same
-visibility_threshold	 	        = 35.0		;same
-always_visible_distance 	        = 0.05		;same
+visibility_threshold	 	        = 45.0		;same
+always_visible_distance 	        = 0.025		;same
 time_quant				            = 1.0		;same
 decrease_value				        = 0.01		;same
 velocity_factor		            	= 0.55		;same
 luminocity_factor			        = 0.65 ;0.3 		;same
 transparency_threshold	        	= 0.6		;same
-still_visible_time                  = 200		;same
+still_visible_time                  = 1500		;same
 
 
 
@@ -401,7 +401,7 @@ max_hear_dist	            	= 250
 ;---VISIBILITY--------------------------------------------------------
 vision_danger_section			= stalker_vision_danger
 vision_free_section				= stalker_vision_free
-eye_fov							= 175
+eye_fov							= 140
 eye_range						= 160
 far_plane_factor				= 1.0		; ������ ��������� ������
 fog_density_factor				= 0.25		; ������ ��������� ������
@@ -475,14 +475,14 @@ bone_model						= bip01
 crouch_type						= -1 ; 0 - crouch a little, 1 - crouch full; -1 - random crouch
 
 ;---FIRE DISPERSIONS--------------------------------------------------
-disp_walk_stand					= 5.1 	;8 ;6
-disp_walk_crouch				= 3.6  	;4 ;3
-disp_run_stand					= 6.3 	;14 ;12;8
-disp_run_crouch					= 4.8 	;6  ;4
-disp_stand_stand				= 2  	;4
-disp_stand_crouch				= 1.5	; 2
-disp_stand_stand_zoom				= 0.42	;1.5 ;1
-disp_stand_crouch_zoom				= 0.24 	;1.25;1
+disp_walk_stand					= 6.0
+disp_walk_crouch				= 4.5
+disp_run_stand					= 8.0
+disp_run_crouch					= 6.5
+disp_stand_stand				= 3.5
+disp_stand_crouch				= 2.5
+disp_stand_stand_zoom			= 1.5
+disp_stand_crouch_zoom			= 1.0
 
 FireRandomMin 		 =     	1
 FireRandomMax 		 =     	10
@@ -677,20 +677,54 @@ fire_wound_immunity  		= 0.25
 wound_2_immunity  			= 0.25
 
 [stalker_strong]:stalker
-$spawn						= "stalkers\stalker_strong"
-immunities_sect				= stalker_immunities_strong
+$spawn						= "stalkers\stalker_heavy"
+immunities_sect				= stalker_immunities_heavy
 
-[stalker_immunities_strong]
-burn_immunity 				= 0.25
-strike_immunity 			= 0.25
-shock_immunity 				= 0.25
-wound_immunity				= 0.5
-radiation_immunity 			= 0.25
-telepatic_immunity 			= 0.25
-chemical_burn_immunity 		= 0.25
-explosion_immunity 			= 0.25
-fire_wound_immunity  		= 0.5
-wound_2_immunity  			= 0.5
+; Renamed from stalker_immunities_strong for clarity. Represents a stalker in heavy armor.
+[stalker_immunities_heavy]
+burn_immunity 				= 0.4  ; Heavy armor is usually less protective against fire
+strike_immunity 			= 0.2
+shock_immunity 				= 0.4  ; And shock
+wound_immunity				= 0.25 ; High ballistic protection
+radiation_immunity 			= 0.5
+telepatic_immunity 			= 0.7
+chemical_burn_immunity 		= 0.4
+explosion_immunity 			= 0.25 ; High protection against shrapnel
+fire_wound_immunity  		= 0.25
+wound_2_immunity  			= 0.25
+
+; --- Suggested immunity progression by rank ---
+; These can be used in character_desc_*.xml files to create a clearer progression.
+
+[stalker_immunities_rookie]:stalker_immunities
+wound_immunity				= 0.9
+explosion_immunity 			= 0.9
+fire_wound_immunity  		= 0.9
+wound_2_immunity  			= 0.9
+
+[stalker_immunities_experienced]:stalker_immunities
+burn_immunity 				= 0.8
+strike_immunity 			= 0.8
+shock_immunity 				= 0.8
+wound_immunity				= 0.7
+radiation_immunity 			= 0.8
+telepatic_immunity 			= 0.9
+chemical_burn_immunity 		= 0.8
+explosion_immunity 			= 0.7
+fire_wound_immunity  		= 0.7
+wound_2_immunity  			= 0.7
+
+[stalker_immunities_veteran]:stalker_immunities
+burn_immunity 				= 0.6
+strike_immunity 			= 0.6
+shock_immunity 				= 0.6
+wound_immunity				= 0.4
+radiation_immunity 			= 0.6
+telepatic_immunity 			= 0.7
+chemical_burn_immunity 		= 0.6
+explosion_immunity 			= 0.4
+fire_wound_immunity  		= 0.4
+wound_2_immunity  			= 0.4
 
 [stalker_immunities_greh_master]
 burn_immunity 				= 0.25
@@ -919,14 +953,15 @@ immunities_sect				= stalker_immunities_arena_mlr
 ;eye_fov							= 160
 ;eye_range						= 100
 
+; Arena fighters (Master level) should be tough. Original values were too high (0.8 = 20% protection).
 [stalker_immunities_arena_mlr]
 burn_immunity 				= 0.55
 strike_immunity 			= 0.55
 shock_immunity 				= 0.55
-wound_immunity				= 0.80
+wound_immunity				= 0.30
 radiation_immunity 			= 0.25
 telepatic_immunity 			= 0.55
 chemical_burn_immunity 		= 0.25
 explosion_immunity 			= 0.55
-fire_wound_immunity  		= 0.8
-wound_2_immunity  			= 0.8
+fire_wound_immunity  		= 0.3
+wound_2_immunity  			= 0.3

@@ -18,6 +18,13 @@ local nvg_rank_chance = {
 	["legend"] = 1.0,
 }
 
+-- Rutas a los archivos de partículas de diferentes colores. Debes crear estos archivos .pe.
+local nvg_particle_paths = {
+	[game_object.friend] = "stealth_nvg\\nvg_dot_green",
+	[game_object.neutral] = "stealth_nvg\\nvg_dot_yellow", -- Ejemplo para neutrales
+	[game_object.enemy] = "stealth_nvg\\nvg_dot_red",
+}
+
 local scuffed_sr_light_patch
 
 function has_nvg(npc)
@@ -46,12 +53,24 @@ function actor_on_update()
 	for npc_id, _ in pairs(stealth_nvg_ps) do
 		local npc = level.object_by_id(npc_id)
 
-		if npc and IsStalker(npc) then -- IsStalker also checks for alive()
-			local particle = particles_t[npc_id]
-			if not particle then
-				particle = particles_object("stealth_nvg\\nvg_dot")
-				particles_t[npc_id] = particle
+		if npc and IsStalker(npc) then -- IsStalker también comprueba si está vivo
+			-- Determinar la partícula necesaria según la relación
+			local rel = npc:relation(db.actor)
+			local required_path = nvg_particle_paths[rel] or nvg_particle_paths[game_object.enemy] -- Por defecto, rojo para relaciones desconocidas
+
+			local particle_info = particles_t[npc_id]
+
+			-- Si la partícula no existe o la relación ha cambiado, crear la partícula correcta
+			if not particle_info or particle_info.path ~= required_path then
+				if particle_info and particle_info.obj then
+					stop_if_playing(particle_info.obj)
+				end
+				local new_particle = particles_object(required_path)
+				particles_t[npc_id] = { obj = new_particle, path = required_path }
+				particle_info = particles_t[npc_id]
 			end
+
+			local particle = particle_info.obj
 
 			if should_play_particles then
 				play_or_move_particles(npc, particle)
@@ -59,9 +78,10 @@ function actor_on_update()
 				stop_if_playing(particle)
 			end
 		else
-			-- NPC is dead, offline, or not a stalker. Cleanup.
-			if particles_t[npc_id] then
-				stop_if_playing(particles_t[npc_id])
+			-- El NPC está muerto, desconectado o no es un stalker. Limpiar.
+			local particle_info = particles_t[npc_id]
+			if particle_info and particle_info.obj then
+				stop_if_playing(particle_info.obj)
 				particles_t[npc_id] = nil
 			end
 
@@ -174,8 +194,9 @@ function npc_on_death_callback(npc)
 	end
 
 	if particles_t[npc:id()] then
-		if particles_t[npc:id()]:playing() then
-			particles_t[npc:id()]:stop()
+		local particle_info = particles_t[npc:id()]
+		if particle_info.obj and particle_info.obj:playing() then
+			particle_info.obj:stop()
 		end
 		particles_t[npc:id()] = nil
 	end

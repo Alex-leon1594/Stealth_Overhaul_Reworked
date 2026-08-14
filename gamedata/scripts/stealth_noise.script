@@ -11,6 +11,16 @@
 online_npcs = {}        -- Global registry: game object id -> true for every alive stalker/monster in range
 current_radius = 0      -- Global: the actor's current noise radius in metres (read by the HUD bar)
 
+local cached_noise = {
+    outfit_obj = nil,
+    outfit_mult = 1.0,
+    art_mult = 1.0,
+    belt_items = {}
+}
+for i=8,19 do
+    cached_noise.belt_items[i] = nil
+end
+
 local base_radius = {   -- Base noise radius (metres) per movement state
 	crouch = 3,         -- Crouched/walking: very quiet
 	walk = 10,          -- Normal walking
@@ -237,6 +247,90 @@ local function on_footstep(mat)
 		end
 	end
 	current_surface_mult = mult                        -- Remember it for compute_radius()
+end
+
+local function compute_radius()
+	local a = db.actor
+	if not (a and a:alive()) then return 0 end
+
+	local r
+	-- Base radius from movement (keeping original logic)
+	if not IsMoveState('mcAnyMove') then r = 0
+	elseif IsMoveState('mcSprint') then r = base_radius.sprint
+	elseif IsMoveState('mcCrouch') then r = base_radius.crouch
+	elseif IsMoveState('mcAccel') then r = base_radius.walk
+	else r = base_radius.run end
+
+	if r == 0 then
+		return 0
+	end
+
+	-- Apply the global MCM multiplier first, as in the original
+	r = r * stealth_mcm.get_config("noise_scale")
+
+	-- Weight (applied to r, as in original)
+	local weight = a:get_total_weight()
+	r = r * (1 + (weight - 30) / 400)
+
+	-- Other multipliers (accumulated in 'mult')
+	local mult = 1.0
+
+	-- Outfit (cached value)
+	local current_outfit = a:item_in_slot(7)
+	if current_outfit ~= cached_noise.outfit_obj then
+		cached_noise.outfit_obj = current_outfit
+		if current_outfit then
+			local outfit_sect = current_outfit:section()
+			if ini_sys:line_exist(outfit_sect, "noise_k") then
+				cached_noise.outfit_mult = ini_sys:r_float(outfit_sect, "noise_k")
+			else
+				cached_noise.outfit_mult = 1.0
+			end
+		else
+			cached_noise.outfit_mult = 1.0
+		end
+	end
+	mult = mult * cached_noise.outfit_mult
+
+	-- Breathing (calculated always, changes frequently)
+	local breath_mult = 1.0
+	if IsWounded(a) then breath_mult = breath_mult * 1.5 end
+	if a.power and a.power < 0.3 then breath_mult = breath_mult * 1.3 end
+	if a.bleeding and a.bleeding > 0.05 then breath_mult = breath_mult * (1 + a.bleeding) end
+	mult = mult * breath_mult
+
+	-- Rain (calculated always)
+	mult = mult * (1 - level.rain_factor() * 0.5)
+
+	-- Artifacts (cached value)
+	local belt_changed = false
+	for i=8,19 do
+		if a:item_in_slot(i) ~= cached_noise.belt_items[i] then
+			belt_changed = true
+			break
+		end
+	end
+
+	if belt_changed then
+		local new_art_mult = 1.0
+		for i=8,19 do
+			local item = a:item_in_slot(i)
+			cached_noise.belt_items[i] = item -- Update the cache
+			if item then
+				local fx = artifact_effects[item:section()]
+				if fx and fx.noise then
+					new_art_mult = new_art_mult * fx.noise
+				end
+			end
+		end
+		cached_noise.art_mult = new_art_mult
+	end
+	mult = mult * cached_noise.art_mult
+
+	-- Surface material underfoot (metal echoes, earth muffles)
+	mult = mult * current_surface_mult
+
+	return r * mult
 end
 
 local function compute_radius()
