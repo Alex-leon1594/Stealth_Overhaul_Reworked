@@ -131,6 +131,10 @@ function npc_on_net_spawn(npc, se_obj)
 	if not (string.find(se_obj:section_name(), "sim_default")) then return end
 
 	CreateTimeEvent("nvg_spawn_delay_e_" .. se_obj.id, "nvg_spawn_delay_a_" .. se_obj.id, 1, function()
+		
+		local profile_id = se_obj and se_obj.character_profile and se_obj:character_profile()
+		if not profile_id or profile_id == "" then return true end
+
 		local rank_val = 0
 		local ok, rank_name = pcall(ranks.get_se_obj_rank_name, se_obj)
 		if ok and rank_name then
