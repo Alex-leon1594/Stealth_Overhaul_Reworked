@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="windows-1251"?>
+
+<!-- 
+	MCM
+-->
+<string_table>
+	<string id="ui_mcm_stealth_title">
+		<text>Скрытность</text>
+	</string>
+	<string id="ui_mcm_menu_stealth">
+		<text>“Пересмотр скрытности (улучшенный)”</text>
+	</string>
+
+	<string id="ui_mcm_stealth_memory">
+		<text>Память</text>
+	</string>
+	<string id="ui_mcm_stealth_memory_desc">
+		<text>Множитель памяти. (Если NPC уже заметил цель, он получает бонус к дальности/четкости обнаружения этой цели. Бонус со временем уменьшается; при значении по умолчанию 1.0 NPC теряет этот бонус в отношении цели примерно за 100 секунд реального времени) \n
+		\n По умолчанию: 1.0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_luminocity">
+		<text>Освещенность</text>
+	</string>
+	<string id="ui_mcm_stealth_luminocity_desc">
+		<text>Множитель освещенности. (Уровень света, падающего на объект) \n
+		\n По умолчанию: 1.0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_distance">
+		<text>Дистанция</text>
+	</string>
+	<string id="ui_mcm_stealth_distance_desc">
+		<text>Множитель дистанции. (Расстояние между объектами, дальность обнаружения и угол обзора) \n
+		\n По умолчанию: 1.0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_velocity">
+		<text>Скорость</text>
+	</string>
+	<string id="ui_mcm_stealth_velocity_desc">
+		<text>Множитель скорости. (Скорость перемещения объекта) \n
+		\n По умолчанию: 1.0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_weight">
+		<text>Вес</text>
+	</string>
+	<string id="ui_mcm_stealth_weight_desc">
+		<text>Множитель веса. (Вес снаряжения персонажа) \n
+		\n По умолчанию: 1.0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_crouch">
+		<text>Приседание</text>
+	</string>
+	<string id="ui_mcm_stealth_crouch_desc">
+		<text>Множитель приседания. \n
+		\n По умолчанию: 0.4</text>
+	</string>
+
+	<string id="ui_mcm_stealth_low_crouch">
+		<text>Низкое приседание</text>
+	</string>
+	<string id="ui_mcm_stealth_low_crouch_desc">
+		<text>Множитель для низкого приседания. \n
+		\n По умолчанию: 0.25</text>
+	</string>
+
+	<string id="ui_mcm_stealth_icon">
+		<text>Значок</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_desc">
+		<text>Значок освещенности. (Отображает уровень освещенности персонажа)</text>
+	</string>
+
+	<string id="ui_mcm_stealth_icon_type">
+		<text>Тип значка</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_type_desc">
+		<text>1) «Индикатор света» показывает уровень освещенности игрока. \n \n
+		2) «Обзор NPC» показывает, как игрока видит NPC (с наивысшим показателем обнаружения): \n
+		- Белый значок: NPC в обычном состоянии и не видит игрока; \n
+		- Желтый значок: NPC в состоянии боя/опасности (с повышенными параметрами зрения) и не видит игрока; \n
+		- Красный значок: NPC видит игрока.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_icon_x">
+		<text>Положение иконки (X)</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_y">
+		<text>Положение иконки (Y)</text>
+	</string>
+
+	<string id="ui_mcm_stealth_nvg_val">
+		<text>Видимость ночью</text>
+	</string>
+	<string id="ui_mcm_stealth_nvg_val_desc">
+		<text>Ночное зрение NPC, использующих ПНВ (сталкеры высоких рангов, отмеченные ночью видимой точкой). Чем выше значение, тем лучше они видят вас в темноте. Значение «0» отключает систему ПНВ. \n \n По умолчанию: 1.0</text>
+	</string>
+	<string id="ui_mcm_stealth_michiko_patch">
+		<text>Патч для погоды Michiko</text>
+	</string>
+	<string id="ui_mcm_stealth_michiko_patch_desc">
+		<text>Рекомендуется включить, если вы используете погодный мод Michiko.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_debugx">
+		<text>Отладка</text>
+	</string>
+	<string id="ui_mcm_stealth_debugx_desc">
+		<text>Отображение переменных расчета (для корректного определения порога необходимо постоянно удерживать курсор на объекте): \n
+		\n Консоль: все переменные \n
+		\n Динамические новости: видит ли объект игрока \n
+		\n Сообщение в нижней части экрана: порог видимости объекта (и переменные, которые можно изменить в MCM)</text>
+	</string>
+
+	<string id="ui_mcm_stealth_logging">
+		<text>Журнал</text>
+	</string>
+	<string id="ui_mcm_stealth_logging_desc">
+		<text>Записывать отдельный файл журнала (logs/stealth_overhaul.log) с событиями обнаружения и шума. Полезно для отладки.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise">
+		<text>Шум шагов</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_desc">
+		<text>Включить систему шума шагов. Передвижение, броня, вес, кровотечение и дождь влияют на то, с какого расстояния вас могут услышать NPC. NPC реагируют на подозрительные звуки.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_bar">
+		<text>Шкала шума</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_bar_desc">
+		<text>Показывает синюю шкалу уровня шума под иконкой HUD. Отключите, чтобы скрыть её, не выключая систему шума.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_bar_key">
+		<text>Клавиша индикатора шума</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_bar_key_desc">
+		<text>Клавиша переключения видимости индикатора шума в игре без открытия меню. Установите 0 в MCM, чтобы отключить привязку.</text>
+	</string>
+	<string id="ui_st_stealth_noise_bar_on">
+		<text>Индикатор шума: ВКЛ</text>
+	</string>
+	<string id="ui_st_stealth_noise_bar_off">
+		<text>Индикатор шума: ВЫКЛ</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_scale">
+		<text>Радиус шума</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_scale_desc">
+		<text>Глобальный множитель радиуса шума шагов. Чем выше значение, тем легче вас услышать.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_handoff">
+		<text>Передача шума AlifeTactics</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_handoff_desc">
+		<text>Когда установлен AlifeTactics и его система шума движения включена, оповещение враждебных сталкеров о шагах передается ему (без двойных тревог). Отключите, чтобы всегда использовать собственные радиусы шума этого мода.</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_hostile_only">
+		<text>Шаги предупреждают только врагов</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_hostile_only_desc">
+		<text>Только NPC враждебной к вам фракции реагируют на ваши шаги. Нейтралы и союзники их игнорируют и не переходят в тревогу, когда вы идете или бежите рядом. Шум от выброшенных предметов и тревога от монстров по-прежнему предупреждают всех.</text>
+	</string>
+	<string id="ui_mcm_stealth_scent">
+		<text>Запах крови</text>
+	</string>
+	<string id="ui_mcm_stealth_scent_desc">
+		<text>Мутанты быстрее обнаруживают персонажа с кровотечением. Они чуют запах крови.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_glare">
+		<text>Ослепление фонарем</text>
+	</string>
+	<string id="ui_mcm_stealth_glare_desc">
+		<text>Если направить луч фонаря прямо в лицо NPC, это ослепит его (он будет хуже вас видеть), но свет выдаст ваше местоположение.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_adaptation">
+		<text>Адаптация к темноте</text>
+	</string>
+	<string id="ui_mcm_stealth_adaptation_desc">
+		<text>NPC, недавно находившиеся на ярком свету, медленнее адаптируются к темноте.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_community">
+		<text>Бдительность группировок</text>
+	</string>
+	<string id="ui_mcm_stealth_community_desc">
+		<text>Военные и наемники более бдительны, чем бандиты или экологи.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_npc_nvg">
+		<text>ПНВ у NPC</text>
+	</string>
+	<string id="ui_mcm_stealth_npc_nvg_desc">
+		<text>NPC, оснащенные приборами ночного видения, лучше видят в темноте.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_takedown">
+		<text>Бесшумные устранения</text>
+	</string>
+	<string id="ui_mcm_stealth_takedown_desc">
+		<text>Нож + приседание + незамеченная цель + удар со спины = мгновенное бесшумное убийство.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_hide_corpse">
+		<text>Прятать трупы</text>
+	</string>
+	<string id="ui_mcm_stealth_hide_corpse_desc">
+		<text>Присядьте рядом со свежим трупом, повернувшись к нему лицом, чтобы спрятать его. Спрятанные трупы не будут обнаружены другими сталкерами.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_monster_alarm_radius">
+		<text>Радиус тревоги мутантов</text>
+	</string>
+	<string id="ui_mcm_stealth_monster_alarm_radius_desc">
+		<text>Когда мутант замечает вас, он поднимает тревогу у ближайших сталкеров в этом радиусе. «0» отключает эту тревогу.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_monster_alarm_dur">
+		<text>Длительность тревоги мутантов</text>
+	</string>
+	<string id="ui_mcm_stealth_monster_alarm_dur_desc">
+		<text>Как долго длится бонус тревоги у сталкеров, поднятой мутантом.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_squad_alert_range">
+		<text>Радиус тревоги группы</text>
+	</string>
+	<string id="ui_mcm_stealth_squad_alert_range_desc">
+		<text>Когда NPC замечает вас, его товарищи по группе в этом радиусе получают бонус обнаружения. «0» отключает эту тревогу.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_squad_alert_dur">
+		<text>Длительность тревоги группы</text>
+	</string>
+	<string id="ui_mcm_stealth_squad_alert_dur_desc">
+		<text>Как долго длится бонус обнаружения у товарищей по группе.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_at_disclosure_gate">
+		<text>Ограничение раскрытия AT</text>
+	</string>
+	<string id="ui_mcm_stealth_at_disclosure_gate_desc">
+		<text>Когда установлен AlifeTactics, товарищи по группе узнают вашу позицию после атаки только если видят вас или уже сражаются с вами. Предотвращает «магическое» знание позиции всей группой после незамеченного попадания. Отключите, чтобы вернуть стандартное поведение AT.</text>
+	</string>
+
+</string_table>

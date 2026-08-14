@@ -1,0 +1,189 @@
+-- Stealth Overhaul: detection meter and alert indicators
+-- by xcvb
+--
+-- Drives the "detection eye" (det_eye) widget from ui_light_gem.xml:
+-- white = undetected, amber = suspicion/alarm, red = spotted.
+-- It also watches monsters and raises alarm when one spots the actor.
+
+local last_update = 0      -- Timestamp (ms) of the last update, used for throttling
+local see_timer = 0        -- Timestamp (ms) of the last line-of-sight (see()) pass, used for throttling
+local seen_any = false     -- Cached "any stalker has line of sight on the actor" from the last see() pass
+local monster_seen = {}    -- Table mapping monster id -> true while it has the actor in sight
+local calm_last = {}       -- Per-NPC timestamp of the last calm-down step (exponential decay clock)
+local last_eye_state = ""  -- Last logged eye state (white/amber/red) to log only transitions
+
+-- Cached MCM settings for performance
+local cfg = {}
+local function update_mcm_cache()
+	cfg.icon = stealth_mcm.get_config("icon")
+	cfg.monster_alarm_radius = stealth_mcm.get_config("monster_alarm_radius")
+	cfg.monster_alarm_dur = stealth_mcm.get_config("monster_alarm_dur")
+end
+
+local function alive(obj)
+	-- Safe "is this object alive" check: pcall guards against dead objects
+	local ok, res = pcall(function() return obj:alive() end)  -- Try calling alive()
+	return ok and res                                         -- Return the result only if the call succeeded
+end
+
+local function is_ally_of_actor(npc)
+	-- True when the NPC belongs to a faction that is friendly to the actor,
+	-- or travels in the actor's squad (escort/companion, regardless of goodwill)
+	local ok, gw = pcall(function() return npc:general_goodwill(db.actor) end)  -- Read the NPC's goodwill toward the actor
+	if ok and gw and gw >= (game_relations and game_relations.FRIENDS or 1000) then  -- FRIENDS value or higher = ally
+		return true
+	end
+	local ok2, squad = pcall(function() return npc:get_squad() end)  -- The NPC's squad id (nil if not in a squad)
+	if not ok2 or not squad then return false end                  -- No squad -> cannot be a companion
+	local ok3, my_squad = pcall(function() return db.actor:get_squad() end)  -- The actor's squad id (nil if none)
+	return ok3 and my_squad ~= nil and my_squad == squad          -- Same squad as the actor = companion
+end
+
+local det_eye  -- The eye widget instance (created lazily by ensure_hud)
+
+local function ensure_hud()
+	-- Create the eye widget once and attach it to the HUD
+	if det_eye then return true end  -- Already created -> nothing to do
+
+	local hud = get_hud()                             -- The global HUD object
+	local cs = hud:GetCustomStatic("mp_warm_up")      -- Try to reuse an existing engine custom static as our host
+	local xml = CScriptXmlInit()                      -- XML initializer helper
+	xml:ParseFile("ui_light_gem.xml")                 -- Load the HUD layout file
+
+	if cs == nil then
+		hud:AddCustomStatic("mp_warm_up", true)       -- Static does not exist yet -> create it
+		cs = hud:GetCustomStatic("mp_warm_up")        -- Fetch it again
+		if not cs then return false end              -- Creation failed -> abort (we'll retry next update)
+		local w = cs:wnd()                            -- Get the static's underlying window
+		local pos = w:GetWndPos()                     -- Read its current position
+		if pos.x ~= 0 then
+			pos.x = 0                                 -- Reset the static position to the screen origin
+			pos.y = 0
+			w:SetWndPos(pos)                          -- Apply the reset position
+		end
+	end
+
+	local ok1 = pcall(function() det_eye = xml:InitStatic("det_eye", cs:wnd()) end)  -- Create the eye as a child of the static
+	if not ok1 then det_eye = nil end                -- On failure keep nil so we retry next frame
+	return det_eye ~= nil                            -- Success only when the eye widget exists
+end
+
+function stealth_ui_update()
+	-- Called every actor update (game tick); refreshes the eye's state and colour
+	local tg = time_global()                          -- Current engine time in ms
+	if tg - last_update < 100 then return end        -- Throttle: run at most every 100 ms
+	last_update = tg                                  -- Remember when we last ran
+
+	if not (db.actor and alive(db.actor)) then return end  -- No actor -> nothing to do
+	if not ensure_hud() then return end                     -- Eye not available -> try again later
+
+	if det_eye then det_eye:Show(cfg.icon) end            -- Toggle eye visibility
+
+	local ap = db.actor:position()                    -- Actor's current position
+	local det = 0                                     -- Highest detection fraction (0..1) among stalkers
+	local spotted = seen_any                          -- Line-of-sight state cached from the last see() pass
+	local amber = false                               -- True when any stalker is alarmed/suspicious
+
+	-- Expensive line-of-sight checks (see()) run at most every 200 ms; the cheap
+	-- decay/meter math below still runs on every tick. Halves the see() load.
+	local see_ok = false                              -- False this tick -> reuse the cached spotted value
+	if tg - see_timer >= 200 then
+		see_timer = tg                                -- Remember when we last ran a see() pass
+		see_ok = true                                 -- Run the full checks this tick
+		spotted = false                               -- Recompute the line-of-sight state from scratch
+	end
+
+	-- --- Stalker detection pass ------------------------------------------
+	for id in pairs(stealth_noise.online_npcs) do     -- Loop over every tracked NPC id
+		local npc = level.object_by_id(id)            -- Resolve the NPC object by id
+		if not npc then
+			stealth_noise.online_npcs[id] = nil       -- Object gone -> drop it from the registry
+		elseif alive(npc) and IsStalker(npc) and npc:id() ~= AC_ID and not is_ally_of_actor(npc) then  -- Relevant hostile stalker
+			local last_eval = visual_memory_manager.vis_last[id]  -- When this NPC last evaluated the actor
+			if last_eval and tg - last_eval > 250 then
+				-- The NPC is no longer being evaluated (left range / lost interest):
+				-- calm the meter down along the same exponential ease-out curve.
+				local dt = (tg - (calm_last[id] or last_eval)) * 0.001  -- Seconds since the last decay step
+				calm_last[id] = tg                                     -- Remember this step
+				local keep = 0.5 ^ (dt / 2.5)                           -- Halve the value every 2.5 s
+				local acc = (visual_memory_manager.vis_acc[id] or 0) * keep  -- Apply the decay
+				if acc < 0 then acc = 0 end                            -- Never go negative
+				visual_memory_manager.vis_acc[id] = acc                -- Write the decayed value back
+			else
+				calm_last[id] = nil                                    -- Being evaluated again -> reset the decay clock
+			end
+
+			if npc:position():distance_to_sqr(ap) < 22500 then  -- NPC within 150 m of the actor
+				if see_ok and npc:see(db.actor) then
+					spotted = true                            -- Direct line of sight -> spotted state
+				else
+					local acc = visual_memory_manager.vis_acc[id] or 0  -- Current accumulated visibility
+					local thr = npc:visibility_threshold() or 35        -- This NPC's threshold
+					local m = clamp(acc / thr, 0, 1)                    -- Detection fraction 0..1
+					if m > det then det = m end                        -- Track the strongest value
+					local vma = visual_memory_manager.alarm_boost[id]  -- Alarm boost deadline for this NPC
+					if (vma and vma > tg) or stealth_noise.is_suspect(npc) then  -- Alarmed or actively investigating?
+						amber = true                                  -- -> amber (suspicion) state
+					end
+				end
+			end
+		end
+	end
+
+	if see_ok then seen_any = spotted end              -- Cache the fresh see() result for the next tick
+
+	-- --- Monster alert pass ----------------------------------------------
+	local monster_radius = cfg.monster_alarm_radius  -- MCM: alert radius when a monster spots the actor (0 = off)
+	local monster_dur = cfg.monster_alarm_dur        -- MCM: alarm duration
+	for id in pairs(stealth_noise.online_npcs) do     -- Loop over the registry again
+		local obj = level.object_by_id(id)            -- Resolve the object
+		if not obj then
+			stealth_noise.online_npcs[id] = nil       -- Object gone -> drop it
+		elseif alive(obj) and IsMonster(obj) and obj:id() ~= AC_ID then  -- Relevant monster
+			if see_ok then
+				local sees = obj:see(db.actor)            -- Does the monster see the actor right now?
+				if sees and not monster_seen[id] then
+					monster_seen[id] = true               -- New sighting -> remember it
+					if monster_radius > 0 then
+						stealth_noise.alarm_nearby(obj, monster_radius, monster_dur)  -- Alert nearby NPCs (radius/duration from MCM)
+					end
+				elseif not sees then
+					monster_seen[id] = nil                -- Lost sight -> forget it
+				end
+			end
+		end
+	end
+
+	if tg % 30000 < 100 then                          -- Once every ~30 s
+		for id in pairs(monster_seen) do
+			if not stealth_noise.online_npcs[id] then monster_seen[id] = nil end  -- Forget monsters that left the registry
+		end
+	end
+
+	-- --- Colour the eye --------------------------------------------------
+	local r, g, b
+	local eye_state
+	if spotted then
+		r, g, b = 255, 70, 60                          -- Red: actor is seen
+		eye_state = "red"
+	elseif amber then
+		r, g, b = 255, 200, 70                         -- Amber: suspicion / alarm
+		eye_state = "amber"
+	else
+		local lum = 120 + det * 135                    -- White-ish, brighter with higher detection
+		r, g, b = lum, lum, lum                        -- Grayscale 120..255
+		eye_state = "white"
+	end
+	if eye_state ~= last_eye_state then
+		last_eye_state = eye_state                     -- Log only state transitions
+		stealth_log.log("Detection state: " .. eye_state .. " (meter " .. string.format("%.0f", det * 100) .. "%)")
+	end
+	det_eye:SetTextureColor(GetARGB(255, r, g, b))     -- Apply the colour to the eye texture
+end
+
+function on_game_start()
+	-- Populate the MCM settings cache on game start and register for changes
+	update_mcm_cache()
+	RegisterScriptCallback("on_option_change", update_mcm_cache)
+	RegisterScriptCallback("actor_on_update", stealth_ui_update)  -- Run our update every actor tick
+end

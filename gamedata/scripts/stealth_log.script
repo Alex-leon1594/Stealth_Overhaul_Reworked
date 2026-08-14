@@ -1,0 +1,77 @@
+-- Stealth Overhaul: dedicated log file
+-- by xcvb
+--
+-- Writes mod-specific events to <anomaly>/logs/stealth_overhaul.log
+-- so the mod can be debugged without touching the engine log.
+-- Enabled via the MCM `logging` option (default ON).
+-- All I/O is protected with pcall: a failure can never break the game.
+
+local last_write = -1000  -- Throttle: minimum ms between two writes (negative start so the first write always goes through)
+local warned_no_path = false  -- Print the "no usable log path" warning only once
+local warned_io_fail = false  -- Print the "write failed" warning only once
+local log_path = nil      -- Cached log path to avoid probing the FS on every write
+
+local function find_log_path()
+	-- Resolve the engine logs directory. Try several candidates so a single
+	-- failing binding never disables the log silently.
+	if log_path then return log_path end -- Return cached path if available
+	local candidates = {
+		function() return getFS():update_path("$logs$", "") end,          -- Standard alias
+		function() return getFS():update_path("$app_data_root$", "logs") end, -- Explicit appdata\logs
+		function() return getFS():update_path("$fs_root$", "appdata\\logs") end, -- Hard fallback
+	}
+	for _, probe in ipairs(candidates) do
+		local ok, path = pcall(probe)
+		if ok and type(path) == "string" and path ~= "" and path ~= "\\" and path ~= "/" then
+			if path:sub(-1) ~= "\\" and path:sub(-1) ~= "/" then path = path .. "\\" end -- Normalize trailing separator
+			log_path = path -- Cache the found path
+			return log_path
+		end
+	end
+
+	local ok2, path2 = pcall(get_log_path)   -- Some engine builds bind this directly
+	if ok2 and type(path2) == "string" and path2 ~= "" then
+		if path2:sub(-1) ~= "\\" and path2:sub(-1) ~= "/" then path2 = path2 .. "\\" end
+		log_path = path2 -- Cache the found path
+		return log_path
+	end
+
+	return nil  -- No usable path -> logging silently disabled
+end
+
+function stealth_log.log(msg)
+	-- Append one timestamped line to the dedicated log file
+	if not (stealth_mcm and stealth_mcm.get_config) then return end  -- MCM module not ready
+	if stealth_mcm.get_config("logging") == false then return end   -- Logging explicitly disabled in MCM (nil = not registered yet -> log anyway)
+
+	local tg = time_global()
+	if tg - last_write < 100 then return end  -- Never write more than 10 lines/second
+	last_write = tg
+
+	local current_log_path = find_log_path()               -- Resolve the logs folder (uses cache)
+	if not current_log_path then
+		if not warned_no_path then
+			warned_no_path = true
+			printf("!StealthOverhaul: no usable log path found, dedicated log disabled")
+		end
+		return
+	end
+
+	pcall(function()                          -- Any I/O error must never crash the game
+		local f = io.open(current_log_path .. "stealth_overhaul.log", "a")  -- Open in append mode
+		if f then
+			f:write(os.date("[%Y-%m-%d %H:%M:%S] ", os.time()) .. msg .. "\n")  -- Timestamped line
+			f:close()                           -- Close immediately (cheap and safe)
+		elseif not warned_io_fail then
+			warned_io_fail = true
+			printf("!StealthOverhaul: could not open %s for writing", current_log_path .. "stealth_overhaul.log")
+		end
+	end)
+end
+
+function on_game_start()
+	-- Log a session header once the game is running
+	RegisterScriptCallback("actor_on_first_update", function()
+		stealth_log.log("=== Stealth Overhaul session started ===")
+	end)
+end

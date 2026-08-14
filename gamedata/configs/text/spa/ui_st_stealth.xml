@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="Windows-1252"?>
+
+<!-- 
+	MCM
+-->
+<string_table>
+
+
+	<string id="ui_mcm_stealth_title">
+		<text>Sigilo</text>
+	</string>
+	<string id="ui_mcm_menu_stealth">
+		<text>Revision del sigilo (mejorada)</text>
+	</string>
+
+	<string id="ui_mcm_stealth_memory">
+		<text>Memoria</text>
+	</string>
+	<string id="ui_mcm_stealth_memory_desc">
+		<text>Multiplicador de memoria. (Si un NPC ya ha visto al objetivo, recibira una bonificacion en su vision contra dicho objetivo. Esta bonificacion disminuye con el tiempo; con el valor predeterminado de 1,0, el NPC tarda unos 100 segundos reales en reducir la bonificacion a 0 frente a ese objetivo). \n \n 
+			Predeterminado: 1,0
+		</text>
+	</string>
+
+	<string id="ui_mcm_stealth_luminocity">
+	<text>Luminosidad</text>
+	</string>
+	<string id="ui_mcm_stealth_luminocity_desc">
+		<text>Multiplicador de luminosidad. (Luz sobre el objeto) \n \n 
+			Predeterminado: 1,0
+		</text>
+	</string>
+
+	<string id="ui_mcm_stealth_distance">
+		<text>Distancia</text>
+	</string>
+	<string id="ui_mcm_stealth_distance_desc">
+		<text>Multiplicador de distancia. (Distancia entre objetos, alcance y campo de vision) \n \n 
+			Predeterminado: 1,0
+		</text>
+	</string>
+
+	<string id="ui_mcm_stealth_velocity">
+		<text>Velocidad</text>
+	</string>
+	<string id="ui_mcm_stealth_velocity_desc">
+		<text>Multiplicador de velocidad. (Velocidad del objeto) \n	\n 
+			Predeterminado: 1,0
+		</text>
+	</string>
+
+	<string id="ui_mcm_stealth_weight">
+	<text>Peso</text>
+	</string>
+	<string id="ui_mcm_stealth_weight_desc">
+	<text>Multiplicador de peso. (Peso que lleva el actor) \n
+	\n Predeterminado: 1,0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_crouch">
+	<text>Agacharse</text>
+	</string>
+	<string id="ui_mcm_stealth_crouch_desc">
+		<text>Multiplicador al agacharse. \n \n 
+			Predeterminado: 0,4
+		</text>
+	</string>
+
+	<string id="ui_mcm_stealth_low_crouch">
+		<text>Agacharse al maximo</text>
+	</string>
+	<string id="ui_mcm_stealth_low_crouch_desc">
+		<text>Multiplicador al agacharse al maximo. \n \n 
+			Predeterminado: 0,25
+		</text>
+	</string>
+
+	<string id="ui_mcm_stealth_icon">
+		<text>Icono</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_desc">
+		<text>Icono de luminosidad. (Muestra la luz que incide sobre el personaje)</text>
+	</string>
+
+	<string id="ui_mcm_stealth_icon_type">
+		<text>Tipo de icono</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_type_desc">
+		<text>1) "Indicador de luz" muestra la cantidad de luz que incide sobre el jugador. \n \n
+			2) "Vision de NPC" muestra como el NPC (con el valor de vision mas alto sobre ti) ve al jugador: \n
+			- Icono blanco: NPC en estado normal y no te ve; \n
+			- Icono amarillo: NPC en combate/peligro (vision mejorada) y no te ve; \n
+			- Icono rojo: el NPC te ve.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_icon_x">
+		<text>Posicion del icono X</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_y">
+		<text>Posicion del icono Y</text>
+	</string>
+
+	<string id="ui_mcm_stealth_nvg_val">
+		<text>Visibilidad nocturna</text>
+	</string>
+	<string id="ui_mcm_stealth_nvg_val_desc">
+		<text>Vision nocturna de los NPC con NVG (stalkers de rango alto, marcados con un punto visible de noche). Cuanto mas alto, mejor te ven en la oscuridad. "0" desactiva el sistema NVG. \n \n Predeterminado: 1,0</text>
+	</string>
+	<string id="ui_mcm_stealth_michiko_patch">
+		<text>Parche para el clima de Michiko</text>
+	</string>
+	<string id="ui_mcm_stealth_michiko_patch_desc">
+		<text>Se recomienda activar esta opcion si utilizas el clima de Michiko.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_debugx">
+		<text>Depuracion</text>
+	</string>
+	<string id="ui_mcm_stealth_debugx_desc">
+		<text>Muestra las variables de la ecuacion (para obtener el umbral correcto, debes mantener el cursor sobre el objeto en todo momento): \n \n 
+			Consola: todas las variables \n \n
+			Noticias dinamicas: si el objeto ve al actor o no \n \n 
+			Mensaje en la parte inferior de la pantalla: umbral de visibilidad del objeto (y variables que puedes modificar en el MCM)
+		</text>
+	</string>
+
+	<string id="ui_mcm_stealth_logging">
+		<text>Registro (log)</text>
+	</string>
+	<string id="ui_mcm_stealth_logging_desc">
+		<text>Escribe un archivo de registro dedicado (logs/stealth_overhaul.log) con los eventos de deteccion y ruido. Util para depurar.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise">
+		<text>Ruido de pasos</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_desc">
+		<text>Activa el sistema de ruido de pasos. El movimiento, la armadura, el peso, el sangrado y la lluvia afectan a la distancia a la que los NPC pueden oirte. Los NPC investigan los ruidos sospechosos.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_bar">
+		<text>Barra de ruido</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_bar_desc">
+		<text>Muestra la barra azul de nivel de ruido bajo el icono del HUD. Desactiva para ocultarla sin apagar el sistema de ruido.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_bar_key">
+		<text>Tecla de la barra de ruido</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_bar_key_desc">
+		<text>Tecla para alternar la visibilidad de la barra de ruido en el juego sin abrir el menu. Ponla a 0 en el MCM para desasignarla.</text>
+	</string>
+	<string id="ui_st_stealth_noise_bar_on">
+		<text>Barra de ruido: ON</text>
+	</string>
+	<string id="ui_st_stealth_noise_bar_off">
+		<text>Barra de ruido: OFF</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_scale">
+		<text>Radio de ruido</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_scale_desc">
+		<text>Multiplicador global para el radio de ruido de los pasos. Un valor mas alto hace que sea mas facil oirte.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_handoff">
+		<text>Delegacion a AlifeTactics</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_handoff_desc">
+		<text>Cuando AlifeTactics esta instalado con su ruido de movimiento activo, las alertas de pasos de los hostiles se delegan a el (sin doble aviso). Desactiva para usar siempre los radios de ruido propios de este mod.</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_hostile_only">
+		<text>Solo hostiles por pasos</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_hostile_only_desc">
+		<text>Solo los NPC cuya faccion es hostil hacia ti reaccionan a tus pasos. Los neutrales y amigos los ignoran y no se ponen en alerta al caminar o correr cerca. El ruido de soltar objetos y las alarmas de monstruos siguen alertando a todos.</text>
+	</string>
+	<string id="ui_mcm_stealth_scent">
+		<text>Olor a sangre</text>
+	</string>
+	<string id="ui_mcm_stealth_scent_desc">
+		<text>Los mutantes detectan mas rapido a un actor que sangra. Pueden oler la sangre.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_glare">
+		<text>Deslumbramiento por linterna</text>
+	</string>
+	<string id="ui_mcm_stealth_glare_desc">
+		<text>Apuntar con la linterna directamente a la cara de un NPC lo deslumbra (su vision empeora), pero la luz delata tu posicion.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_adaptation">
+		<text>Adaptacion a la oscuridad</text>
+	</string>
+	<string id="ui_mcm_stealth_adaptation_desc">
+		<text>Los NPC que han estado recientemente bajo una luz intensa tardan mas en adaptarse a la oscuridad.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_community">
+		<text>Percepcion de la comunidad</text>
+	</string>
+	<string id="ui_mcm_stealth_community_desc">
+		<text>Los militares y mercenarios estan mas alerta que los bandidos o los ecologistas.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_npc_nvg">
+		<text>Vision nocturna de los NPC</text>
+	</string>
+	<string id="ui_mcm_stealth_npc_nvg_desc">
+		<text>Los NPC equipados con dispositivos de vision nocturna ven mejor por la noche.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_takedown">
+		<text>Eliminaciones silenciosas</text>
+	</string>
+	<string id="ui_mcm_stealth_takedown_desc">
+		<text>Cuchillo + agacharse + objetivo desprevenido + por la espalda = muerte silenciosa instantanea.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_hide_corpse">
+		<text>Ocultar cadaveres</text>
+	</string>
+	<string id="ui_mcm_stealth_hide_corpse_desc">
+		<text>Agachate junto a un cadaver reciente mientras lo miras para ocultarlo. Los cadaveres ocultos nunca son descubiertos por otros stalkers.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_monster_alarm_radius">
+		<text>Radio de alarma de monstruos</text>
+	</string>
+	<string id="ui_mcm_stealth_monster_alarm_radius_desc">
+		<text>Cuando un monstruo te ve, alerta a los stalkers cercanos dentro de este radio. "0" desactiva esta alarma.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_monster_alarm_dur">
+		<text>Duracion de la alarma de monstruos</text>
+	</string>
+	<string id="ui_mcm_stealth_monster_alarm_dur_desc">
+		<text>Cuanto dura el impulso de alarma que reciben los stalkers avisados por un monstruo.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_squad_alert_range">
+		<text>Radio de alerta de escuadron</text>
+	</string>
+	<string id="ui_mcm_stealth_squad_alert_range_desc">
+		<text>Cuando un NPC te ve, sus companeros de escuadron dentro de este radio reciben un impulso de deteccion. "0" desactiva esta alerta.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_squad_alert_dur">
+		<text>Duracion de la alerta de escuadron</text>
+	</string>
+	<string id="ui_mcm_stealth_squad_alert_dur_desc">
+		<text>Cuanto dura el impulso de deteccion que reciben los companeros de escuadron.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_at_disclosure_gate">
+		<text>Filtro de revelacion de AT</text>
+	</string>
+	<string id="ui_mcm_stealth_at_disclosure_gate_desc">
+		<text>Cuando AlifeTactics esta instalado, los companeros de escuadron solo conocen tu posicion tras un ataque si pueden verte o ya estan combatiendo contigo. Evita que todo el escuadron sepa magicamente donde estas tras un golpe no visto. Desactiva para restaurar el comportamiento original de AT.</text>
+	</string>
+
+</string_table>

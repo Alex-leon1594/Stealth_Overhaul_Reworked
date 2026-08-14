@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="windows-1251"?>
+
+<!-- 
+	MCM
+-->
+<string_table>
+
+
+	<string id="ui_mcm_stealth_title">
+		<text>Stealth</text>
+	</string>
+	<string id="ui_mcm_menu_stealth">	
+		<text>Stealth Overhaul Reworked</text>
+	</string>
+
+	<string id="ui_mcm_stealth_memory">
+		<text>Memory</text>
+	</string>
+	<string id="ui_mcm_stealth_memory_desc">
+		<text>Memory multiplier. (If NPC already saw target then NPC will receive boost to their vision against this target. Decreases with time, with default value of 1.0 it takes around 100 real-life seconds for NPC to drop their boost to 0 against this target) \n 
+				\n Default: 1.0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_luminocity">
+		<text>Luminosity</text>
+	</string>
+	<string id="ui_mcm_stealth_luminocity_desc">
+		<text>Luminosity multiplier. (Light on object) \n 
+				\n Default: 1.0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_distance">
+		<text>Distance</text>
+	</string>
+	<string id="ui_mcm_stealth_distance_desc">
+		<text>Distance multiplier. (Distance from object to object, range and fov) \n 
+				\n Default: 1.0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_velocity">
+		<text>Velocity</text>
+	</string>
+	<string id="ui_mcm_stealth_velocity_desc">
+		<text>Velocity multiplier. (Speed of object) \n 
+				\n Default: 1.0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_weight">
+		<text>Weight</text>
+	</string>
+	<string id="ui_mcm_stealth_weight_desc">
+		<text>Weight multiplier. (Weight on actor) \n 
+				\n Default: 1.0</text>
+	</string>
+
+	<string id="ui_mcm_stealth_crouch">
+		<text>Crouch</text>
+	</string>
+	<string id="ui_mcm_stealth_crouch_desc">
+		<text>Crouch multiplier. \n 
+				\n Default: 0.4</text>
+	</string>
+
+	<string id="ui_mcm_stealth_low_crouch">
+		<text>Low crouch</text>
+	</string>
+	<string id="ui_mcm_stealth_low_crouch_desc">
+		<text>Low crouch multiplier. \n 
+				\n Default: 0.25</text>
+	</string>
+
+	<string id="ui_mcm_stealth_icon">
+		<text>Icon</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_desc">
+		<text>Luminosity icon. (Displays light on actor)</text>
+	</string>
+
+	<string id="ui_mcm_stealth_icon_type">
+		<text>Icon Type</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_type_desc">
+		<text>1) "Light indicator" displays amount of light on player. \n \n
+			2) "NPC vision" displays how the NPC (with the highest vision value on you) sees the player: \n
+			- White icon: NPC in normal state and does not see player; \n
+			- Yellow icon: NPC in combat/danger (has boosted vision parameters) and does not see player; \n
+			- Red icon: NPC sees player.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_icon_x">
+		<text>Icon Placement X</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_y">
+		<text>Icon Placement Y</text>
+	</string>
+
+	<string id="ui_mcm_stealth_nvg_val">
+		<text>Night visibility</text>
+	</string>
+	<string id="ui_mcm_stealth_nvg_val_desc">
+		<text>Night vision of NPCs that own NVGs (higher-rank stalkers, marked by a visible dot at night). Higher = they see you better in the dark. "0" disables the NVG system. \n \n Default: 1.0</text>
+	</string>
+	<string id="ui_mcm_stealth_michiko_patch">
+		<text>Michiko weather patch</text>
+	</string>
+	<string id="ui_mcm_stealth_michiko_patch_desc">
+		<text>Recommended to enable this if you use Michiko's weather.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_debugx">
+		<text>Debug</text>
+	</string>
+	<string id="ui_mcm_stealth_debugx_desc">
+		<text>Displaying equation variables (for correct threshold you have to keep cursor on object all the time): \n 
+				\n Console: all variables \n 
+				\n Dynamic news: if object see actor or not \n 
+				\n Bottom of the screen message: visibility threshold of object (and variables that you can change in MCM)</text>
+	</string>
+
+	<string id="ui_mcm_stealth_logging">
+		<text>Logging</text>
+	</string>
+	<string id="ui_mcm_stealth_logging_desc">
+		<text>Write a dedicated log file (logs/stealth_overhaul.log) with detection and noise events. Useful for debugging.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise">
+		<text>Footstep noise</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_desc">
+		<text>Enable the footstep noise system. Movement, armor, weight, bleeding and rain all affect how far NPCs can hear you. NPCs investigate suspicious noises.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_bar">
+		<text>Noise bar</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_bar_desc">
+		<text>Show the blue noise-level bar under the HUD icon. Disable to hide it while keeping the noise system active.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_bar_key">
+		<text>Noise bar hotkey</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_bar_key_desc">
+		<text>Key to toggle the noise bar visibility in-game without opening the menu. Set to 0 in MCM to unbind it.</text>
+	</string>
+	<string id="ui_st_stealth_noise_bar_on">
+		<text>Noise bar: ON</text>
+	</string>
+	<string id="ui_st_stealth_noise_bar_off">
+		<text>Noise bar: OFF</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_scale">
+		<text>Noise radius</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_scale_desc">
+		<text>Global multiplier for the footstep noise radius. Higher = easier to hear you.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_handoff">
+		<text>AlifeTactics handoff</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_handoff_desc">
+		<text>When AlifeTactics is installed with its movement-noise enabled, hostile stalkers' footstep alerts are delegated to it (no double alerting). Disable to always use this mod's own noise radii.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_noise_hostile_only">
+		<text>Hostile-only footsteps</text>
+	</string>
+	<string id="ui_mcm_stealth_noise_hostile_only_desc">
+		<text>Only NPCs whose faction is hostile to you react to your footsteps. Neutrals and friends ignore them and won't go on alert when you walk or run nearby. Item-drop noise and monster alarms still alert everyone.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_scent">
+		<text>Blood scent</text>
+	</string>
+	<string id="ui_mcm_stealth_scent_desc">
+		<text>Mutants detect a bleeding actor faster. They can smell blood.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_glare">
+		<text>Flashlight glare</text>
+	</string>
+	<string id="ui_mcm_stealth_glare_desc">
+		<text>Pointing your flashlight directly at an NPC's face dazzles them (they see you worse), but the light gives away your position.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_adaptation">
+		<text>Dark adaptation</text>
+	</string>
+	<string id="ui_mcm_stealth_adaptation_desc">
+		<text>NPCs that were recently in bright light adapt slower to the darkness.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_community">
+		<text>Community awareness</text>
+	</string>
+	<string id="ui_mcm_stealth_community_desc">
+		<text>Military and mercenaries are more alert than bandits or ecologists.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_npc_nvg">
+		<text>NPC night vision</text>
+	</string>
+	<string id="ui_mcm_stealth_npc_nvg_desc">
+		<text>NPCs wearing night vision devices see better at night.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_takedown">
+		<text>Silent takedowns</text>
+	</string>
+	<string id="ui_mcm_stealth_takedown_desc">
+		<text>Knife + crouch + undetected target + from behind = instant silent kill.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_hide_corpse">
+		<text>Hide corpses</text>
+	</string>
+	<string id="ui_mcm_stealth_hide_corpse_desc">
+		<text>Crouch next to a fresh corpse while facing it to hide it. Hidden corpses are never found by other stalkers.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_monster_alarm_radius">
+		<text>Monster alarm radius</text>
+	</string>
+	<string id="ui_mcm_stealth_monster_alarm_radius_desc">
+		<text>When a monster spots you, it alarms nearby stalkers within this radius. "0" disables this alarm.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_monster_alarm_dur">
+		<text>Monster alarm duration</text>
+	</string>
+	<string id="ui_mcm_stealth_monster_alarm_dur_desc">
+		<text>How long the alarm boost lasts for stalkers alarmed by a monster.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_squad_alert_range">
+		<text>Squad alert range</text>
+	</string>
+	<string id="ui_mcm_stealth_squad_alert_range_desc">
+		<text>When an NPC spots you, squadmates within this radius get a detection boost. "0" disables this alert.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_squad_alert_dur">
+		<text>Squad alert duration</text>
+	</string>
+	<string id="ui_mcm_stealth_squad_alert_dur_desc">
+		<text>How long the detection boost lasts for squadmates.</text>
+	</string>
+
+	<string id="ui_mcm_stealth_at_disclosure_gate">
+		<text>AT hit-disclosure gate</text>
+	</string>
+	<string id="ui_mcm_stealth_at_disclosure_gate_desc">
+		<text>When AlifeTactics is installed, squadmates only learn your position after an attack if they can actually see you or are already fighting you. Prevents the whole squad from magically knowing where you are after an unseen hit. Disable to restore AT's stock disclosure behavior.</text>
+	</string>
+
+</string_table>

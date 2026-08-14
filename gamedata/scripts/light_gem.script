@@ -1,0 +1,244 @@
+-- Stealth Overhaul: dual HUD — light gem (mode 1) / NPC vision bar (mode 2), movable icon
+-- ported from Stealth 2.31 (by xcvb), adapted to the Reworked build
+
+local HUD = nil          -- Reference to the active StealthIcon dialog (nil while hidden)
+local icon_mode = nil    -- Cached icon mode (1 = light gem static, 2 = NPC vision progress bar)
+local noise_bar_override = nil  -- Keybind override for the noise bar (nil = follow MCM, true/false = forced state)
+
+-- Cached MCM settings for performance
+local cfg = {}
+local function update_mcm_cache()
+	cfg.icon = stealth_mcm.get_config("icon")
+	cfg.icon_type = stealth_mcm.get_config("icon_type")
+	cfg.icon_x = stealth_mcm.get_config("icon_x")
+	cfg.icon_y = stealth_mcm.get_config("icon_y")
+	cfg.noise = stealth_mcm.get_config("noise")
+	cfg.noise_bar = stealth_mcm.get_config("noise_bar")
+end
+
+function reset_hud()
+	-- Rebuild the HUD dialog from scratch (used when the icon type changes in MCM)
+	deactivate_hud()      -- Remove and destroy the current dialog
+	activate_hud()        -- Create and register a fresh dialog with the new type
+end
+
+function deactivate_hud()
+	-- Unregister the dialog and stop listening for actor death/destroy events
+	if HUD ~= nil then
+		get_hud():RemoveDialogToRender(HUD)  -- Take the dialog out of the HUD's render list
+		HUD = nil                            -- Drop our reference to it
+	end
+
+	-- Stop reacting to the actor being destroyed or dying (the HUD would be invalid anyway)
+	UnregisterScriptCallback("actor_on_net_destroy", deactivate_hud)
+	UnregisterScriptCallback("actor_on_before_death", deactivate_hud)
+end
+
+function activate_hud()
+	-- (Re)build the HUD if the actor is alive again or the option was switched on
+	RegisterScriptCallback("actor_on_net_destroy", deactivate_hud)  -- Auto-hide when the actor is destroyed
+	RegisterScriptCallback("actor_on_before_death", deactivate_hud) -- Auto-hide when the actor dies
+
+	if HUD == nil then
+		HUD = StealthIcon()                -- Instantiate the icon dialog (loads the XML)
+		get_hud():AddDialogToRender(HUD)   -- Hand the dialog to the engine HUD for rendering
+	end
+end
+
+function upd_hud()
+	-- Called when the "icon" option or any other option changes in MCM
+	-- enable/disable icon
+	update_mcm_cache() -- Refresh the settings cache
+	noise_bar_override = nil  -- Any MCM change resets the keybind override (the checkbox regains control)
+	if cfg.icon then
+		activate_hud()     -- Icon enabled -> make sure the HUD dialog exists
+		stealth_log.log("HUD icon: enabled (mode " .. (cfg.icon_type or 1) .. ")")  -- Log the HUD state
+	else
+		deactivate_hud()   -- Icon disabled -> destroy the HUD dialog
+		stealth_log.log("HUD icon: disabled")  -- Log the HUD state
+	end
+
+	-- if icon enabled then update its type
+	if HUD ~= nil then
+		icon_mode = cfg.icon_type  -- Cache the newly selected mode
+		reset_hud()                                       -- Recreate the dialog so the new type takes effect
+	end
+end
+
+-- Keybind override for the noise bar (MCM `noise_bar_key`, default F7).
+function noise_bar_visible()
+	-- Effective noise-bar visibility: the keybind override when set, else the MCM option
+	if noise_bar_override ~= nil then return noise_bar_override end
+	return cfg.noise_bar == true
+end
+
+function on_key_press(key)
+	-- Toggle the noise bar with the configured hotkey (0 = unbound in MCM)
+	if not cfg.noise then return end  -- Noise system off -> nothing to toggle
+	local hotkey = stealth_mcm.get_config("noise_bar_key")  -- Configured DIK key
+	if not hotkey or hotkey == 0 or key ~= hotkey then return end  -- Unbound or a different key
+	if not (actor_menu and actor_menu.is_hud_free and actor_menu.is_hud_free()) then return end  -- Blocked in menus/trade
+	if not (db.actor and db.actor:alive()) then return end  -- No live actor
+	if db.actor:is_talking() then return end  -- Blocked during conversations
+
+	if noise_bar_override == nil then
+		noise_bar_override = not (cfg.noise_bar == true)  -- First press flips the MCM state
+	else
+		noise_bar_override = not noise_bar_override  -- Later presses flip the override
+	end
+
+	local msg = noise_bar_override and "ui_st_stealth_noise_bar_on" or "ui_st_stealth_noise_bar_off"  -- Localized tip string
+	pcall(function() actor_menu.set_msg(1, game.translate_string(msg), 3) end)  -- HUD tip (safe)
+	stealth_log.log("Noise bar keybind: " .. (noise_bar_override and "ON" or "OFF"))  -- Log the toggle
+end
+
+function on_game_start()
+	-- Wire up the callbacks: run once on the actor's first update and on every MCM option change
+	RegisterScriptCallback("actor_on_first_update", function()
+		update_mcm_cache()
+		upd_hud()
+	end)
+	RegisterScriptCallback("on_option_change", upd_hud)
+	RegisterScriptCallback("on_key_press", on_key_press)  -- Hotkey: toggle the noise bar
+end
+
+function on_game_end()
+	UnregisterScriptCallback("on_key_press", on_key_press)  -- Stop listening for the hotkey
+end
+
+---------------------------------------- HUD -------------------------------------------------------
+
+class "StealthIcon" (CUIScriptWnd)  -- Define the HUD window class derived from the base script window
+
+function StealthIcon:__init() super()  -- Constructor: call the base class constructor first
+
+	self.xml	= CScriptXmlInit()                 -- XML initializer helper
+	self.xml:ParseFile("ui_light_gem.xml")       -- Load the HUD layout from the XML file
+
+	self:InitControls()                          -- Create all child widgets (gem + noise bar)
+
+end
+
+function StealthIcon:InitControls()
+	-- Create the child widgets from the XML; which gem is used depends on icon_type
+
+	local xml = self.xml
+
+	-- Mode 1 = light gem (a static image tinted by light); mode 2 = NPC vision (a progress bar)
+	if (icon_mode or cfg.icon_type or 1) == 1 then
+		self.gem = xml:InitStatic("gem", self)           -- Static widget "gem" from the XML
+	else
+		self.gem = xml:InitProgressBar("gem_bar", self)  -- Progress bar "gem_bar" from the XML
+	end
+
+	self.noise = xml:InitProgressBar("noise_bar", self)  -- Blue noise-level bar under the icon
+
+end
+
+function StealthIcon:Update()
+	-- Called every frame while the dialog is registered with the HUD
+	CUIScriptWnd.Update(self)  -- Let the base class do its default update (input handling, etc.)
+
+	self.gem:Show(main_hud_shown())  -- Only show the gem when the main HUD is on screen
+
+	local xx = cfg.icon_x  -- Read the icon X position from cache
+	local yy = cfg.icon_y  -- Read the icon Y position from cache
+	self.gem:SetWndPos(vector2():set(xx, yy))    -- Move the gem to the configured position
+
+	local show_noise = main_hud_shown() and cfg.noise and noise_bar_visible()  -- Show the noise bar only if the HUD is visible, the noise system is enabled and the bar is enabled (MCM or hotkey override)
+	self.noise:Show(show_noise)  -- Toggle the noise bar visibility
+	if show_noise then
+		local max_rad = 30  -- The bar is considered full at 30 m (the sprint base radius)
+		local rad = (stealth_noise and stealth_noise.current_radius) or 0  -- Current noise radius in metres (0 when not updated yet)
+		local pct = clamp(rad / max_rad, 0, 1)  -- Noise level as a fraction 0..1
+		self.noise:SetProgressPos(math.floor(pct * 100 + 0.5))  -- Fill percentage rounded to 0..100
+
+		-- Colour gradient: green (quiet) -> yellow (loud) -> red (very loud).
+		-- The fill texture (bar_noise_fill.dds) is white with the same shape as the
+		-- track (bar_noise.dds), so the tint shows through at full brightness.
+		local r, g, b
+		if pct < 0.5 then
+			local t = pct * 2        -- 0..1 over the green->yellow half
+			r, g, b = 255 * t, 255, 0  -- (0,255,0) green -> (255,255,0) yellow
+		else
+			local t = (pct - 0.5) * 2  -- 0..1 over the yellow->red half
+			r, g, b = 255, 255 * (1 - t), 0  -- yellow -> (255,0,0) red
+		end
+		self.noise:SetColor(GetARGB(255, r, g, b))  -- Apply the gradient colour
+
+		self.noise:SetWndPos(vector2():set(xx + 32, yy - 24))  -- Right of the 24-px gem (8 px gap), centred on its height: bar is 80 px tall vs gem 32 px -> (32-80)/2 = -24
+	end
+
+	-- Update the gem itself depending on the active mode
+	if (icon_mode or cfg.icon_type or 1) == 1 then
+		self:StatUpd()  -- Mode 1: tint the static gem by the ambient light level
+	else
+		self:BarUpd()   -- Mode 2: fill the bar by the strongest NPC detection value
+	end
+end
+
+function StealthIcon:StatUpd()
+	-- Light-gem mode: darken the gem as the surrounding light drops
+	local TINT_MAX = 245  -- Maximum RGB value used for the tint (255 would be pure white)
+	local LUM_MULT = 1  -- multiplier applied to the luminosity value, higher generaly means lighter. too high and the gem won't get dark, to low and it won't get light.
+	local FLASHLIGHT_PENALTY = .3 --flat value to make the gem jump as a reminder that you should shut off the light.
+
+	local gem_lum = visual_memory_manager.icon_lum()  -- Current light level at the actor's position
+	local torch = db.actor:item_in_slot(10)           -- Item in the torch slot
+	local flash = db.actor:item_in_slot(9)            -- Item in the detector slot
+
+	if (torch and torch:torch_enabled()) then
+		gem_lum = gem_lum + FLASHLIGHT_PENALTY  -- Brighten the gem while the torch is on
+	elseif (flash and (flash:section() == "device_flashlight") and db.actor:active_detector()) then
+		gem_lum = gem_lum + FLASHLIGHT_PENALTY  -- Same penalty for an active flashlight detector
+	end
+
+	local val = TINT_MAX - clamp(TINT_MAX * LUM_MULT * gem_lum, 0, TINT_MAX)  -- Invert: high light -> low val -> bright gem
+
+	local gem_color = GetARGB(255,255-val,255-val,255-val)  -- Grayscale tint (bright gem when well lit)
+	self.gem:SetTextureColor(gem_color)                     -- Apply the tint to the gem texture
+
+end
+
+function StealthIcon:BarUpd()
+	-- NPC-vision mode: fill the bar with the strongest NPC's detection percentage
+	local max_pct = 0        -- Highest detection percentage among all nearby NPCs
+	local in_danger = false  -- True when any NPC is in alarm / boosted-suspicion state
+	local tg = time_global() -- Current engine time in milliseconds
+
+	for id, acc in pairs(visual_memory_manager.vis_acc or {}) do  -- Loop over every NPC's accumulated visibility
+		local npc = level.object_by_id(id)  -- Resolve the NPC object by its id
+		if npc then
+			local ok, npc_alive = pcall(function() return npc:alive() end)  -- Safe alive check (object may already be gone)
+			if ok and npc_alive and IsStalker(npc) then
+				local thr = npc:visibility_threshold() or 35  -- Detection threshold for this NPC (default 35)
+				local pct = clamp(acc / thr, 0, 1)            -- Current detection as a fraction 0..1
+				if pct > max_pct then max_pct = pct end       -- Keep the strongest value
+				local vma = visual_memory_manager.alarm_boost and visual_memory_manager.alarm_boost[id]  -- Alarm boost deadline for this NPC
+				if (vma and vma > tg) or (stealth_noise and stealth_noise.is_suspect and stealth_noise.is_suspect(npc)) then
+					in_danger = true  -- NPC is alarmed or actively investigating -> flag the danger state
+				end
+			end
+		end
+	end
+
+	local gem_val = math.floor(max_pct * 100 + 0.5)  -- Convert the fraction to a 0..100 fill value
+	self.gem:SetProgressPos(gem_val)                 -- Set the bar fill
+
+	local gem_color_white = GetARGB(255, 255, 255, 255)  -- White: no danger
+	local gem_color_yellow = GetARGB(255, 255, 255, 0)   -- Yellow: combat / suspicion
+	local gem_color_red = GetARGB(255, 255, 0, 0)        -- Red: spotted
+
+	if gem_val >= 100 then
+		self.gem:SetColor(gem_color_red)    -- Fully detected -> red
+	elseif in_danger then
+		self.gem:SetColor(gem_color_yellow) -- Danger/suspicion -> yellow
+	else
+		self.gem:SetColor(gem_color_white)  -- Normal -> white
+	end
+
+end
+
+function StealthIcon:__finalize()
+	-- Destructor hook (unused; kept for reference)
+end

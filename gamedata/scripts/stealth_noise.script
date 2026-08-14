@@ -1,0 +1,424 @@
+-- Stealth Overhaul: Footstep Noise System, Distractions and Squad Alerts
+-- extends visual_memory_manager / xr_danger of the Stealth mod
+-- by xcvb
+--
+-- Responsibilities:
+--  * Track which stalkers/monsters are online (online_npcs registry)
+--  * Compute the actor's current noise radius (footsteps, weight, rain, artifacts...)
+--  * Make nearby NPCs investigate (threat_danger state) when noise reaches them
+--  * Provide alarm_nearby() / noise_at() helpers used by other modules
+
+online_npcs = {}        -- Global registry: game object id -> true for every alive stalker/monster in range
+current_radius = 0      -- Global: the actor's current noise radius in metres (read by the HUD bar)
+
+local base_radius = {   -- Base noise radius (metres) per movement state
+	crouch = 3,         -- Crouched/walking: very quiet
+	walk = 10,          -- Normal walking
+	run = 20,           -- Running (mcAccel)
+	sprint = 30,        -- Sprinting: loudest
+}
+
+local artifact_effects = {  -- Noise multiplier per artifact carried (belt artifacts)
+	["af_compass"]			= {noise = 0.75},   -- Quiets your steps
+	["af_black_sphere"]		= {noise = 0.7},    -- Quiets your steps
+	["af_night_star"]		= {noise = 0.8},    -- Quiets your steps
+	["af_crystal_flower"]	= {noise = 0.8},    -- Quiets your steps
+	["af_glass"]			= {noise = 0.9},    -- Slightly quieter
+	["af_gravi"]			= {noise = 1.2},    -- Louder (heavy/dense)
+	["af_medusa"]			= {noise = 1.15},   -- Louder
+	["af_fireball"]			= {noise = 1.3},    -- Loudest
+}
+
+local surface_mult = {  -- Noise multiplier per surface material underfoot
+	["metal"]    = 1.8,   -- Metal decking/gratings: echoes loudly
+	["concrete"] = 1.5,   -- Concrete/asphalt: carries far
+	["glass"]    = 1.4,   -- Glass: sharp clicks
+	["wood"]     = 1.3,   -- Wooden floors: creaky
+	["water"]    = 1.1,   -- Shallow water: splashes
+	["earth"]    = 0.9,   -- Soft earth: muffled
+	["dirt"]     = 0.9,   -- Dirt paths: muffled
+	["grass"]    = 0.9,   -- Grass: muffled
+	["bush"]     = 0.9,   -- Undergrowth: muffled
+}
+
+local current_surface_mult = 1  -- Active surface multiplier (updated on each footstep)
+
+local last_update = 0     -- Timestamp (ms) of the last noise update (throttling)
+local last_refresh = 0    -- Timestamp (ms) of the last full registry refresh
+local handoff_logged = false  -- One-time log flag for the AlifeTactics handoff
+
+local function alive(obj)
+	-- Safe alive check via pcall (the object may be destroyed/invalid)
+	local ok, res = pcall(function() return obj:alive() end)  -- Attempt the call
+	return ok and res                                         -- Return the result only on success
+end
+
+local function is_ally_of_actor(npc)
+	-- True when the NPC's faction goodwill toward the actor is FRIENDS or higher
+	local ok, gw = pcall(function() return npc:general_goodwill(db.actor) end)  -- Read goodwill
+	return ok and gw and gw >= (game_relations and game_relations.FRIENDS or 1000)  -- FRIENDS threshold (default 1000)
+end
+
+local function is_hostile_to_actor(npc)
+	-- True when the NPC's engine relation to the actor is ENEMY (hostile faction),
+	-- matching the game_relations.ltx attitude thresholds (enemy = attitude < -999).
+	-- Neutrals (goodwill 0) and friends return false — they must not go on alert
+	-- from mere footsteps.
+	local ok, rel = pcall(function() return npc:relation(db.actor) end)  -- Engine relation check
+	return ok and rel == game_object.enemy  -- Hostile only
+end
+
+local function refresh_registry()
+	-- Full rescan of db.storage to rebuild the online_npcs list (fallback for missed net events)
+	local tg = time_global()          -- Current time
+	if tg - last_refresh < 5000 then return end  -- Run at most once every 5 s
+	last_refresh = tg                 -- Remember when we ran
+
+	for id, st in pairs(db.storage) do  -- Loop over every stored game object
+		if id == AC_ID then
+			-- skip actor  -- The actor itself is not a candidate NPC
+		elseif st and st.object then    -- Entry exists and has a live object
+			local ok, npc = pcall(function()
+				return (IsStalker(st.object) or IsMonster(st.object)) and st.object:alive()  -- Is it an alive stalker/monster?
+			end)
+			if ok and npc then
+				online_npcs[id] = true  -- Add to the registry
+			else
+				online_npcs[id] = nil   -- Dead or invalid -> remove
+			end
+		else
+			online_npcs[id] = nil       -- Broken entry -> remove
+		end
+	end
+
+	for id in pairs(online_npcs) do     -- Second pass: prune ids that are no longer in storage
+		if not db.storage[id] then
+			online_npcs[id] = nil       -- Gone from storage -> remove
+		end
+	end
+end
+
+local function purge_stale()
+	-- Quick prune of registry entries whose engine object no longer exists
+	for id in pairs(online_npcs) do
+		if not level.object_by_id(id) then
+			online_npcs[id] = nil       -- Object destroyed -> remove immediately
+		end
+	end
+end
+
+-- Event-driven registry maintenance (engine net_spawn/net_destroy callbacks,
+-- see callbacks_gameobject.script). Keeps online_npcs fresh without waiting
+-- for the 5 s refresh_registry scan; refresh_registry stays as a fallback.
+local function on_net_spawn(obj)
+	-- A new object was spawned in the world -> add it to the registry if relevant
+	if not obj then return end                         -- Nothing to do
+	local ok, id = pcall(function()
+		if obj:id() == AC_ID then return nil end        -- Ignore the actor
+		if not ((IsStalker(obj) or IsMonster(obj)) and obj:alive()) then return nil end  -- Only alive stalkers/monsters
+		return obj:id()                                 -- Return the object's id
+	end)
+	if ok and id then
+		online_npcs[id] = true                          -- Register it
+	end
+end
+
+local function on_net_destroy(obj)
+	-- An object was destroyed -> remove it from the registry
+	if not obj then return end
+	local ok, id = pcall(function() return obj:id() end)  -- Get its id safely
+	if ok then
+		online_npcs[id] = nil                            -- Drop it
+	end
+end
+
+-- Visualize the current noise radius in the world (Modded Exes debug_render),
+-- enabled via the MCM `debugx` flag.
+local function update_debug_radius(radius, pos)
+	if not (debug_render and DBG_ScriptObject) then return end  -- Feature not available -> skip
+	local ok = pcall(function()
+		local sphere = debug_render.add_object("stealth_noise_radius", DBG_ScriptObject.sphere):cast_dbg_sphere()  -- Create a debug sphere object
+		sphere.visible = radius > 0                       -- Hide it when the radius is zero
+		if radius > 0 then
+			sphere.color = fcolor():set(0.2, 0.7, 1, 0.35)  -- Semi-transparent light blue
+			sphere.matrix = matrix():mul(matrix():translate(pos), matrix():identity():scale(radius, radius, radius))  -- Position and scale it at the actor
+		end
+	end)
+	return ok
+end
+
+function suspect(npc, dur)
+	-- Mark an NPC as "suspect" (actively suspicious of the actor) for a duration
+	if not (npc and alive(npc)) then return end   -- Invalid NPC -> skip
+	local st = db.storage[npc:id()]                -- Get the NPC's storage entry
+	if not st then return end                      -- No entry -> skip
+	st.stealth_suspect = time_global() + (dur or 5000)  -- Store the expiry timestamp (default 5 s)
+end
+
+function is_suspect(npc)
+	-- True while the NPC is marked as suspect
+	if not (npc and alive(npc)) then return false end  -- Invalid -> not suspect
+	local st = db.storage[npc:id()]                -- Its storage entry
+	return st and st.stealth_suspect and st.stealth_suspect > time_global()  -- Suspect until the stored timestamp passes
+end
+
+function investigate(npc, pos, level)
+	-- Send an NPC to investigate a position; level 1 = casual, level 2 = high alert
+	if not (npc and alive(npc) and IsStalker(npc)) then return end  -- Only alive stalkers
+	if npc:id() == AC_ID then return end            -- Never the actor
+	if is_ally_of_actor(npc) then return end        -- Allies never investigate
+	if npc:has_info("npcx_is_companion") then return end  -- Companions don't investigate the player
+	if npc:best_enemy() then return end             -- Already fighting someone -> skip
+	if IsWounded(npc) or character_community(npc) == "zombied" then return end  -- Wounded/zombies ignore noises
+	if xr_combat_ignore.npc_in_safe_zone(npc) then return end  -- NPCs in safe zones never investigate
+
+	level = level or 1                              -- Default alert level 1
+	if level >= 2 then
+		-- High alert: use the danger system with a longer persistence
+		if xr_danger and xr_danger.set_script_danger then
+			xr_danger.set_script_danger(npc, 4000 + level * 2000, AC_ID, vec_set(pos))  -- Script danger at the noise position
+		else
+			state_mgr.set_state(npc, "threat_danger", nil, nil, {look_position = vec_set(pos)})  -- Fallback: force the danger state
+		end
+		suspect(npc, 6000)                          -- Keep them suspicious for 6 s
+	else
+		if is_suspect(npc) then return end          -- Already suspicious -> don't spam states
+		state_mgr.set_state(npc, "threat_danger", nil, nil, {look_position = vec_set(pos)})  -- Send them to investigate the position
+		suspect(npc, 5000)                          -- Keep them suspicious for 5 s
+	end
+end
+
+function alarm_nearby(obj, radius, dur)
+	-- Alert every stalker within `radius` of `obj` (used by stealth_ui when a monster sees the actor)
+	if not obj then return end                      -- Nothing to alarm
+	purge_stale()                                    -- Drop dead ids first
+	local r2 = (radius or 150) ^ 2                   -- Squared radius for distance comparisons (default 150 m)
+	local tg = time_global()                         -- Current time
+	dur = dur or 4000                                -- Alarm duration (default 4 s)
+
+	for id in pairs(stealth_noise.online_npcs) do    -- Loop over the registry
+		local npc = level.object_by_id(id)           -- Resolve the NPC
+		if npc and npc:alive() and IsStalker(npc) and not npc:has_info("npcx_is_companion") and not is_ally_of_actor(npc) then  -- Relevant hostile stalker
+			if obj:position():distance_to_sqr(npc:position()) < r2 then  -- Within alarm radius
+				visual_memory_manager.alarm_boost[id] = tg + dur  -- Boost their detection accumulation for the duration
+				suspect(npc, dur + 1000)             -- Mark them suspect a bit longer
+				investigate(npc, obj:position(), 2)  -- Send them to investigate at high alert
+				stealth_log.log("Monster alarm: NPC " .. id .. " alerted by monster " .. obj:id() .. " (radius " .. (radius or 150) .. " m)")  -- Log the alarm
+			end
+		end
+	end
+end
+
+local function get_artifact_mult()
+	-- Multiply the noise radius by the combined effect of carried belt artifacts
+	local m = 1                                       -- Neutral multiplier
+	if not (db.actor and db.actor.iterate_inventory) then return m end  -- No actor/inventory API -> neutral
+	db.actor:iterate_inventory(function(_, obj)        -- Loop over every inventory item
+		if obj then
+			local fx = artifact_effects[obj:section()]  -- Look up the artifact by its section name
+			if fx and fx.noise then m = m * fx.noise end  -- Chain-multiply its noise factor
+		end
+	end)
+	return m
+end
+
+local function on_footstep(mat)
+	-- Called on each actor footstep with the material name underfoot:
+	-- update the surface multiplier used by compute_radius()
+	if not mat or type(mat) ~= "string" then
+		current_surface_mult = 1                       -- Unknown surface -> neutral
+		return
+	end
+	local mult = 1                                     -- Default: neutral
+	for name, m in pairs(surface_mult) do              -- Loop over known surfaces
+		if string.find(mat, name) then                 -- Material name contains the key (e.g. "metal_plate")
+			mult = m                                   -- Apply the surface multiplier
+			break
+		end
+	end
+	current_surface_mult = mult                        -- Remember it for compute_radius()
+end
+
+local function compute_radius()
+	-- Compute the full noise radius for the actor's current situation
+	local a = db.actor
+	if not (a and a:alive()) then return 0 end        -- No live actor -> zero noise
+
+	local r
+	if not IsMoveState('mcAnyMove') then r = 0         -- Standing still -> silent
+	elseif IsMoveState('mcSprint') then r = base_radius.sprint  -- Sprinting
+	elseif IsMoveState('mcCrouch') then r = base_radius.crouch  -- Crouched
+	elseif IsMoveState('mcAccel') then r = base_radius.walk     -- Walking fast (shift) -> walk level
+	else r = base_radius.run end                       -- Otherwise: running
+
+	r = r * stealth_mcm.get_config("noise_scale")      -- Apply the global MCM multiplier
+
+	local outfit = a:item_in_slot(7)                   -- Equipped outfit
+	if outfit and ini_sys:line_exist(outfit:section(), "noise_k") then  -- Outfit defines a custom noise factor
+		r = r * ini_sys:r_float(outfit:section(), "noise_k")  -- Apply it (e.g. padded suits are quieter)
+	end
+
+	local w = a:get_total_weight()                     -- Actor's total carried weight in kg
+	r = r * (1 + (w - 30) / 400)                       -- Heavier = louder (linearly from 30 kg baseline)
+
+	local breath = 1                                   -- Breathing/noise-of-body multiplier
+	if IsWounded(a) then breath = breath * 1.5 end     -- Wounded -> louder
+	if a.power and a.power < 0.3 then breath = breath * 1.3 end  -- Exhausted -> louder
+	if a.bleeding and a.bleeding > 0.05 then breath = breath * (1 + a.bleeding) end  -- Bleeding -> much louder
+	r = r * breath                                     -- Apply the breathing multiplier
+
+	r = r * (1 - level.rain_factor() * 0.5)            -- Rain masks footsteps (up to half)
+
+	r = r * get_artifact_mult()                        -- Apply artifact effects
+
+	r = r * current_surface_mult                       -- Surface material underfoot (metal echoes, earth muffles)
+
+	return r
+end
+
+local function at_noise_handoff()
+	-- AlifeTactics compatibility: when AT is installed and its movement-noise
+	-- system is enabled, hostile stalkers' footstep alerting is delegated to AT
+	-- (its own radii and set_script_danger), avoiding double danger stamping.
+	-- Our system keeps the HUD bar, item-drop noise, monster alarms and
+	-- neutral-NPC investigation. Disable via the MCM `noise_handoff` option.
+	if not stealth_mcm.get_config("noise_handoff") then return false end
+	if not at_mcm then return false end
+	local ok, v = pcall(function() return at_mcm.get_config("danger_move_noise") end)
+	return ok and v ~= false
+end
+
+function stealth_noise_update()
+	-- Called on every actor update; recomputes the noise radius and alerts NPCs
+	if not (db.actor and db.actor:alive()) then
+		current_radius = 0                             -- No live actor -> reset the HUD bar
+		return
+	end
+	local tg = time_global()                           -- Current time
+	if tg - last_update < 250 then return end          -- Throttle: at most every 250 ms
+	last_update = tg                                   -- Remember when we ran
+
+	purge_stale()                                      -- Drop destroyed objects
+	refresh_registry()                                 -- Rebuild the NPC registry
+
+	if not stealth_mcm.get_config("noise") then        -- Noise system disabled in MCM
+		current_radius = 0                             -- Keep the HUD bar empty
+		return
+	end
+
+	local a = db.actor
+	local radius = compute_radius()                    -- Compute the current noise radius
+	current_radius = radius                            -- Publish it for the HUD bar
+	if radius <= 1 then return end                     -- Below 1 m: nothing relevant to alert
+
+	local ap = a:position()                            -- Actor position
+	if stealth_mcm.get_config("debugx") then
+		update_debug_radius(radius, ap)                -- Visualize the radius in debug mode
+	end
+
+	local r2 = radius ^ 2                              -- Squared radius for distance checks
+	local handoff = at_noise_handoff()                 -- AlifeTactics handoff probe (once per pass)
+	if handoff and not handoff_logged then
+		handoff_logged = true                          -- Log the delegation once
+		stealth_log.log("AlifeTactics detected: hostile footstep alerts delegated to AT (MCM noise_handoff)")  -- Log the handoff
+	end
+	for id in pairs(stealth_noise.online_npcs) do      -- Loop over all tracked NPCs
+		local npc = level.object_by_id(id)             -- Resolve the NPC
+		if npc and npc:alive() and IsStalker(npc) then  -- Alive stalker
+			local d2 = npc:position():distance_to_sqr(ap)  -- Squared distance to the actor
+			if d2 < r2 then                            -- Inside the noise sphere
+				local skip = false                     -- AlifeTactics covers hostile footstep alerts
+				if handoff then
+					local ok, rel = pcall(function() return npc:relation(db.actor) end)
+					skip = ok and rel == game_object.enemy
+				end
+				if not skip and stealth_mcm.get_config("noise_hostile_only") then
+					skip = not is_hostile_to_actor(npc)  -- Neutrals/friends ignore footsteps (MCM noise_hostile_only)
+				end
+				if not skip then
+					investigate(npc, ap, math.sqrt(d2) / radius < 0.45 and 2 or 1)  -- Very close to the centre -> high alert, otherwise casual
+				end
+			end
+		end
+	end
+end
+
+function noise_at(pos, radius, alert_level)
+	-- Make NPCs within `radius` of an arbitrary position investigate (used for item drops, etc.)
+	purge_stale()                                      -- Drop dead ids first
+	local r2 = (radius or 10) ^ 2                       -- Squared radius (default 10 m)
+	for id in pairs(stealth_noise.online_npcs) do      -- Loop over the registry
+		local npc = level.object_by_id(id)             -- Resolve the NPC
+		if npc and npc:alive() and IsStalker(npc) and not npc:best_enemy() then  -- Alive stalker not already fighting
+			if npc:position():distance_to_sqr(pos) < r2 then  -- Within radius of the noise source
+				investigate(npc, pos, alert_level or 2)  -- Send them to investigate (default high alert)
+			end
+		end
+	end
+end
+
+function on_item_drop(obj, type)
+	-- When the actor drops an item, nearby NPCs hear the noise
+	if not (stealth_mcm.get_config("noise") and db.actor and db.actor:alive()) then return end  -- Noise off or no actor -> skip
+	local radius = math.max(10, current_radius or 0)  -- Scale the drop noise with the current noise level (min 10 m)
+	noise_at(db.actor:position(), radius, 2)          -- High alert at the actor's position
+	stealth_log.log("Item dropped: noise at actor position (" .. math.floor(radius + 0.5) .. " m)")  -- Log the drop noise
+end
+
+-- ============ AlifeTactics hit-disclosure gate ============
+-- AT's at_disclosure force-injects the shooter into the whole squad's memory
+-- on the first faction-enemy hit, even when nobody saw or heard the attack
+-- ("magic" squad-wide knowledge of your position). We wrap xcombat.disclose_enemy
+-- (AT's only disclosure entry point, resolved live at call time) so that
+-- disclosures of the ACTOR only go through when the member actually sees the
+-- actor or is already fighting him. NPC-vs-NPC disclosures and all other
+-- callers pass through untouched. Toggle via the MCM `at_disclosure_gate`
+-- option (default ON). Verified safe:
+--   * xcombat.disclose_enemy is the sole disclosure call site in AT
+--     (at_disclosure.script:38, resolved at call time, not cached).
+--   * The return value is only used for logging/counting in AT, so returning
+--     false on a suppressed disclosure breaks nothing.
+--   * The gate only ever fires for who == AC_ID; every other call returns
+--     through the original function unchanged.
+local _orig_disclose_enemy = nil
+
+local function _at_gate_disclose(npc, enemy, opts)
+	if enemy and enemy:id() == AC_ID and stealth_mcm.get_config("at_disclosure_gate") then
+		-- Actor-initiated disclosure: only allow it when the member can see
+		-- the actor or is already fighting him (not a "magic" reveal).
+		local ok, sees = pcall(function() return npc and npc:see(enemy) end)  -- Member has the actor in sight?
+		local ok2, be = pcall(function() return npc and npc:best_enemy() end) -- Member already fighting?
+		local engaging = ok and sees == true
+		if not engaging and ok2 and be and be:id() == enemy:id() then
+			engaging = true
+		end
+		if not engaging then
+			return false  -- Suppress the disclosure for this member
+		end
+	end
+	if _orig_disclose_enemy then
+		return _orig_disclose_enemy(npc, enemy, opts)
+	end
+	return false
+end
+
+local function patch_at_disclosure_gate()
+	-- Called on game start; wraps xcombat.disclose_enemy once if it exists.
+	if _orig_disclose_enemy or not xcombat then return end  -- Already patched or no xlibs
+	local ok, fn = pcall(function() return xcombat.disclose_enemy end)
+	if not (ok and type(fn) == "function") then return end  -- xlibs too old / not installed
+	_orig_disclose_enemy = xcombat.disclose_enemy           -- Keep the original
+	xcombat.disclose_enemy = _at_gate_disclose              -- Install our wrapper
+	stealth_log.log("AlifeTactics disclosure gate active (squadmates only learn your position when they see/fight you; MCM at_disclosure_gate)")  -- Log the gate
+end
+
+function on_game_start()
+	-- Register all engine callbacks for this module
+	stealth_log.log("stealth_noise: system ready (base radii: crouch 3 / walk 10 / run 20 / sprint 30 m)")  -- Log module init
+	RegisterScriptCallback("actor_on_update", stealth_noise_update)          -- Periodic noise computation
+	RegisterScriptCallback("actor_on_footstep", on_footstep)                 -- Surface-dependent noise radius
+	RegisterScriptCallback("actor_on_item_drop", on_item_drop)               -- Item drops make noise
+	RegisterScriptCallback("game_object_on_net_spawn", on_net_spawn)         -- Track new objects
+	RegisterScriptCallback("game_object_on_net_destroy", on_net_destroy)     -- Untrack destroyed objects
+	patch_at_disclosure_gate()                                               -- Wrap AT's disclosure (if installed)
+end

@@ -1,0 +1,201 @@
+-- Stealth Overhaul: NPC NVG system (rank-gated, visible eye dot, torch off)
+-- ported from Stealth 2.31 (by xcvb), adapted for the Reworked build
+
+stealth_nvg_ps = {}
+local particles_t = {}
+local allow_upd = false
+local nvg_dbg = false
+local last_update = 0
+
+local nvg_rank_chance = {
+	["novice"] = 0,
+	["trainee"] = 0,
+	["experienced"] = 0.2,
+	["professional"] = 0.2,
+	["veteran"] = 0.5,
+	["expert"] = 0.5,
+	["master"] = 0.85,
+	["legend"] = 1.0,
+}
+
+local scuffed_sr_light_patch
+
+function has_nvg(npc)
+	if not (npc and stealth_nvg_ps[npc:id()]) then return false end
+	local ok, res = pcall(function() return npc:alive() end)
+	return ok and res
+end
+
+function actor_on_update()
+	local tg = time_global()
+	if not allow_upd or (tg - last_update < 200) then return end -- Throttle to 5 times per second
+	last_update = tg
+
+	local nvg_mcm_val = stealth_mcm.get_config("nvg_val")
+	local hrs = level.get_time_hours() + level.get_time_minutes() / 60
+	local is_night = (hrs > 21 or hrs < 5)
+
+	-- If NVG system is off and it's not night, no need to loop
+	if nvg_mcm_val <= 0 and not is_night then
+		return
+	end
+
+	local should_play_particles = nvg_mcm_val > 0 and is_night
+	local ids_to_remove
+
+	for npc_id, _ in pairs(stealth_nvg_ps) do
+		local npc = level.object_by_id(npc_id)
+
+		if npc and IsStalker(npc) then -- IsStalker also checks for alive()
+			local particle = particles_t[npc_id]
+			if not particle then
+				particle = particles_object("stealth_nvg\\nvg_dot")
+				particles_t[npc_id] = particle
+			end
+
+			if should_play_particles then
+				play_or_move_particles(npc, particle)
+			else
+				stop_if_playing(particle)
+			end
+		else
+			-- NPC is dead, offline, or not a stalker. Cleanup.
+			if particles_t[npc_id] then
+				stop_if_playing(particles_t[npc_id])
+				particles_t[npc_id] = nil
+			end
+
+			if not ids_to_remove then ids_to_remove = {} end
+			table.insert(ids_to_remove, npc_id)
+		end
+	end
+
+	-- Remove cleaned up NPCs from the main list
+	if ids_to_remove then
+		for _, id in ipairs(ids_to_remove) do
+			stealth_nvg_ps[id] = nil
+		end
+	end
+end
+
+function play_or_move_particles(npc, particle_obj)
+	local eye_bone_pos = vector():set(npc:bone_position("eyelid_1"))
+	local npc_dir = vector():set(npc:direction())
+	local eye_pos = eye_bone_pos:add(npc_dir:mul(0.1))
+	eye_pos.y = eye_pos.y + 0.05 -- Directly modify the y-component to avoid creating a new vector object
+	-- play particle
+	if not (particle_obj:playing()) then
+		particle_obj:play_at_pos(eye_pos)
+	-- move particle
+	else
+		particle_obj:move_to(eye_pos, VEC_ZERO)
+	end
+
+end
+
+function stop_if_playing(particle_obj)
+	if not particle_obj:playing() then return end
+	particle_obj:stop()
+end
+
+-----------------------------------------
+-- NVG owners turn off their headlamp at night (patched sr_light logic)
+if sr_light and sr_light.check_light then
+	scuffed_sr_light_patch = sr_light.check_light
+	function sr_light.check_light(npc)
+		local hrs = level.get_time_hours() + level.get_time_minutes() / 60
+		local is_night = (hrs > 21 or hrs < 5)
+
+		if not (stealth_mcm.get_config("nvg_val") > 0 and has_nvg(npc) and is_night) then -- MCM check here is fine as it's not per-frame
+			return scuffed_sr_light_patch(npc)
+		end
+
+		local st = db.storage[npc:id()]
+		local tg = time_global()
+		if not (st) then return end
+
+		if (st and st.srlight_timer and tg < st.srlight_timer) then
+			return
+		end
+		st.srlight_timer = tg + 2000 + math.random(100)
+
+		local torch = npc:object("device_torch")
+		if (torch and torch:attachable_item_enabled()) then
+			torch:enable_attachable_item(false)
+		end
+
+	end
+end
+
+function npc_on_net_spawn(npc, se_obj)
+	if not (string.find(se_obj:section_name(), "sim_default")) then return end
+
+	CreateTimeEvent("nvg_spawn_delay_e_" .. se_obj.id, "nvg_spawn_delay_a_" .. se_obj.id, 1, function()
+		local rank_val = 0
+		local ok, rank_name = pcall(ranks.get_se_obj_rank_name, se_obj)
+		if ok and rank_name then
+			rank_val = nvg_rank_chance[rank_name] or 0
+		end
+		if (not (stealth_nvg_ps[se_obj.id])) and (rank_val > 0 and math.random() <= rank_val) then
+			stealth_nvg_ps[se_obj.id] = true
+		end
+		return true
+	end)
+
+end
+
+function actor_on_first_update()
+	local correct_game_ver = GAME_VERSION and (string.find(GAME_VERSION, "1.5.2") or string.find(GAME_VERSION, "1.5.3"))
+	if (not correct_game_ver) or (stealth_mcm.get_config("nvg_val") <= 0) then
+		empty_table(stealth_nvg_ps)
+		return
+	end
+
+	for id, v in pairs(stealth_nvg_ps) do
+		if type(v) ~= "boolean" then
+			stealth_nvg_ps[id] = true
+		end
+	end
+
+	CreateTimeEvent("delay_for_game_objects_e", "delay_for_game_objects_a", 1, function()
+		allow_upd = true
+		return true
+	end)
+end
+
+function npc_on_death_callback(npc)
+	-- remove keys if npc died
+	if stealth_nvg_ps[npc:id()] then
+		stealth_nvg_ps[npc:id()] = nil
+	end
+
+	if particles_t[npc:id()] then
+		if particles_t[npc:id()]:playing() then
+			particles_t[npc:id()]:stop()
+		end
+		particles_t[npc:id()] = nil
+	end
+
+end
+
+function save_state(m_data)
+	m_data.stealth_nvg_ps = stealth_nvg_ps
+end
+
+function load_state(m_data)
+	stealth_nvg_ps = m_data.stealth_nvg_ps or {}
+end
+
+function pr(...)
+	if not nvg_dbg then return end
+	printf(...)
+end
+
+function on_game_start()
+	RegisterScriptCallback("actor_on_update", actor_on_update)
+	RegisterScriptCallback("npc_on_net_spawn", npc_on_net_spawn)
+	RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+	RegisterScriptCallback("npc_on_death_callback", npc_on_death_callback)
+	RegisterScriptCallback("save_state", save_state)
+	RegisterScriptCallback("load_state", load_state)
+end

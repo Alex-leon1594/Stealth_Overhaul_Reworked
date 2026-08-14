@@ -1,0 +1,98 @@
+-- Stealth Overhaul: MCM integration (Mod Configuration Menu)
+-- by xcvb
+--
+-- If you don't use MCM, change your defaults from here.
+
+local defaults = {          -- Fallback values used when MCM is not installed
+	["memory"] = 1,         -- How fast NPCs forget the actor after losing sight
+	["luminocity"] = 1,     -- Overall effect of light/darkness on detection
+	["distance"] = 1,       -- Effect of distance on detection
+	["velocity"] = 1,       -- Effect of movement speed on detection
+	["weight"] = 1,         -- Effect of carried weight on detection
+	["crouch"] = 0.4,       -- Detection multiplier while crouched
+	["low_crouch"] = 0.25,  -- Detection multiplier while crouched + moving slowly
+	["icon"] = true,        -- Show the HUD icon (eye / gem / noise bar)
+	["icon_type"] = 1,      -- HUD icon mode: 1 = light gem, 2 = NPC vision bar
+	["icon_x"] = 970,       -- HUD icon X position (0-1000)
+	["icon_y"] = 650,       -- HUD icon Y position (0-1000)
+	["michiko_patch"] = false,  -- Alternative (harsher) night luminosity curve
+	["debugx"] = false,     -- Debug printing for the targeted NPC
+	["logging"] = true,     -- Write the dedicated log file (logs/stealth_overhaul.log)
+	["nvg_val"] = 1,        -- Night-vision multiplier for NPCs that own NVGs
+	["noise"] = true,       -- Enable the footstep noise system
+	["noise_bar"] = true,   -- Show the HUD noise bar under the icon
+	["noise_bar_key"] = DIK_keys.DIK_F7,  -- Hotkey to toggle the noise bar in-game (0 = unbound)
+	["noise_scale"] = 1,    -- Global noise radius multiplier
+	["noise_handoff"] = true,  -- Delegate hostile footstep alerts to AlifeTactics (auto-detect)
+	["noise_hostile_only"] = true,  -- Only factions hostile to the actor react to footsteps (neutrals/friends ignore them)
+	["scent"] = true,       -- Mutants smell your blood
+	["glare"] = true,       -- Flashlight blindness / backlight glare
+	["adaptation"] = true,  -- NPC eyes adapt between light and dark
+	["community"] = true,   -- Faction-specific perception
+	["npc_nvg"] = true,     -- NPCs with active NVGs see better at night
+	["takedown"] = true,    -- Enable silent knife takedowns
+	["hide_corpse"] = true, -- Enable corpse hiding
+	["monster_alarm_radius"] = 150,  -- Radius in metres: monsters that spot you alert nearby stalkers (0 = disabled)
+	["monster_alarm_dur"] = 4000,    -- Duration (ms) of the monster alarm boost
+	["squad_alert_range"] = 200,     -- Radius in metres: squadmates of a spotting NPC get an alert boost (0 = disabled)
+	["squad_alert_dur"] = 3000,      -- Duration (ms) of the squad alert boost
+	["at_disclosure_gate"] = true,   -- AT hit-disclosure gate: squadmates only learn your position when they see/fight you
+}
+
+function get_config(key)
+	-- Fetch a config value: from MCM when present, otherwise from the defaults table.
+	-- ui_mcm.get() can return nil when its options tree is not registered yet;
+	-- in that case fall back to the built-in default instead of returning nil.
+	if ui_mcm then
+		local v = ui_mcm.get("stealth/" .. key)
+		if v ~= nil then return v end
+	end
+	return defaults[key]
+end
+
+function on_mcm_load()
+	-- Build the MCM menu definition for the "Stealth" section
+	op = { id= "stealth",sh=true ,gr={                  -- Section id, shown, group list
+			{ id= "title",type= "slide",link= "ui_options_slider_player",text="ui_mcm_stealth_title",size= {512,50},spacing= 20 },  -- Title banner
+			{id = "memory", type = "track", val = 2, min=0.1,max=3,step=0.1, def = 1},           -- Slider: memory strength
+			{id = "luminocity", type = "track", val = 2, min=0.1,max=3,step=0.1, def = 1},       -- Slider: luminosity effect
+			{id = "distance", type = "track", val = 2, min=0.1,max=3,step=0.1, def = 1},         -- Slider: distance effect
+			{id = "velocity", type = "track", val = 2, min=0.1,max=3,step=0.1, def = 1},         -- Slider: movement speed effect
+			{id = "weight", type = "track", val = 2, min=0.1,max=3,step=0.1, def = 1},           -- Slider: weight effect
+			{id = "crouch", type = "track", val = 2, min=0.05,max=1,step=0.05, def = 0.4},       -- Slider: crouch multiplier
+			{id = "low_crouch", type = "track", val = 2, min=0.05,max=1,step=0.05, def = 0.25},  -- Slider: crouch + slow movement
+			{id = "icon", type = "check", val = 1, def = true},                                  -- Checkbox: show HUD icon
+			{id = "icon_type", type = "list", val = 2, def = 1, content = {{1, "Light indicator"}, {2, "NPC vision"}}, no_str = true},  -- List: icon mode
+			{id = "icon_x", type = "input", val = 2, min = 0, max = 1000, def = 970},           -- Number input: icon X
+			{id = "icon_y", type = "input", val = 2, min = 0, max = 1000, def = 650},           -- Number input: icon Y
+			{id = "nvg_val", type = "track", val = 2, min=0,max=3,step=0.05, def = 1},          -- Slider: NPC NVG strength
+			{id= "divider", type = "line" },                                                    -- Visual separator
+			{id = "michiko_patch", type = "check", val = 1, def = false},                       -- Checkbox: harsher night curve
+			{id= "divider", type = "line" },
+			{id = "debugx", type = "check", val = 1, def = false},                              -- Checkbox: debug output
+			{id = "logging", type = "check", val = 1, def = true},                              -- Checkbox: dedicated log file
+			{id= "divider", type = "line" },
+			{id = "noise", type = "check", val = 1, def = true},                                -- Checkbox: noise system
+			{id = "noise_bar", type = "check", val = 1, def = true},                            -- Checkbox: noise HUD bar
+			{id = "noise_bar_key", type = "key_bind", val = 2, def = DIK_keys.DIK_F7, text = "ui_mcm_stealth_noise_bar_key"},  -- Hotkey: toggle the noise bar in-game
+			{id = "noise_scale", type = "track", val = 2, min=0.5,max=3,step=0.1, def = 1},     -- Slider: noise radius multiplier
+			{id = "noise_handoff", type = "check", val = 1, def = true},                        -- Checkbox: AlifeTactics handoff
+			{id = "noise_hostile_only", type = "check", val = 1, def = true},                    -- Checkbox: only hostile factions react to footsteps
+			{id = "scent", type = "check", val = 1, def = true},                                -- Checkbox: scent system
+			{id = "glare", type = "check", val = 1, def = true},                                -- Checkbox: flashlight glare
+			{id = "adaptation", type = "check", val = 1, def = true},                           -- Checkbox: eye adaptation
+			{id = "community", type = "check", val = 1, def = true},                            -- Checkbox: faction perception
+			{id = "npc_nvg", type = "check", val = 1, def = true},                              -- Checkbox: NPC NVG system
+			{id = "takedown", type = "check", val = 1, def = true},                             -- Checkbox: silent takedowns
+			{id = "hide_corpse", type = "check", val = 1, def = true},                          -- Checkbox: corpse hiding
+			{id= "divider", type = "line" },
+			{id = "monster_alarm_radius", type = "track", val = 2, min=0,max=300,step=5, def = 150},  -- Slider: monster alarm radius (0 = off)
+			{id = "monster_alarm_dur", type = "track", val = 2, min=0,max=10000,step=500, def = 4000},  -- Slider: monster alarm duration
+			{id = "squad_alert_range", type = "track", val = 2, min=0,max=500,step=10, def = 200},  -- Slider: squad alert range (0 = off)
+			{id = "squad_alert_dur", type = "track", val = 2, min=0,max=10000,step=500, def = 3000},  -- Slider: squad alert duration
+			{id = "at_disclosure_gate", type = "check", val = 1, def = true},                        -- Checkbox: AT hit-disclosure gate
+		}
+	}
+
+	return op  -- Hand the menu definition to MCM
+end

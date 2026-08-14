@@ -1,0 +1,26 @@
+<w>
+	
+		<gem x="990" y="660" width="24" height="32" stretch="1">
+			<texture>ui\lightgem\circle.dds</texture>
+		</gem>
+
+		<gem_bar x="990" y="660" width="32" height="32" min="0" max="100">
+			<progress>
+				<texture>ui\lightgem\eye2.dds</texture>
+			</progress>
+		</gem_bar>
+
+		<det_eye x="1025" y="660" width="24" height="32" stretch="1">
+			<texture>ui\lightgem\eye.dds</texture>
+		</det_eye>
+
+		<noise_bar x="1025" y="640" width="10" height="80" min="0" max="100" vertical="1">
+			<background>
+				<texture>ui\lightgem\bar_noise.dds</texture>
+			</background>
+			<progress>
+				<texture>ui\lightgem\bar_noise_fill.dds</texture>
+			</progress>
+		</noise_bar>
+
+</w>

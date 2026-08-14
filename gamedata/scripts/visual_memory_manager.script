@@ -1,0 +1,605 @@
+-- Visual Memory Manager exports
+-- by Alundaio
+
+-- called from engine
+-- This occurs during the visible check. If value >= visiblity_threshold then object is considered visible
+-- warning npc and who can be nil sometimes
+
+-- luminocity rewritten from scratch by Andruxa
+
+local jacket_t = {       -- Detection multiplier per outfit "kind"
+	["o_medium"] = 2,     -- Medium armour: 2x
+	["o_sci"] = 2,        -- Science suit: 2x
+	["o_light"] = 1.35,   -- Light armour: 1.35x
+	["o_heavy"] = 4.5,    -- Heavy armour: 4.5x (loud/bulky)
+}
+
+local jacketmult = 1              -- Current outfit kind multiplier (from jacket_t)
+local summ = 0                    -- Accumulated debug detection value (debugx only)
+local renderer = get_console_cmd(0,"renderer")  -- Read the active renderer from the console
+local dxeight = 'renderer_r1'     -- The r1 renderer's console name
+local is_r1 = (renderer == dxeight)  -- True when running the old r1 renderer (different light math)
+local pewpewmult = 0              -- Temporary visibility boost when the actor fires a weapon
+local muzzle_t = {}               -- Per-NPC muzzle flash boost: npc id -> value
+local get_camo_k = 0              -- Current camouflage coefficient from the outfit
+local vision_memory = {}          -- Per NPC/who pair: remembers whether one has seen the other (npc_id -> who_id -> bool)
+local marked = {}                 -- NPCs marked because the actor hit them unseen (npc id -> expiry ms)
+local MARK_DURATION = 10000       -- an unseen-hit mark pins detection to max this long, then normal decay resumes
+local campfire_npcs = {}          -- NPCs standing near a burning campfire: id -> luminosity boost
+local cf_tmr = 0                  -- Timer for the campfire scan (throttled to 1 Hz)
+local g_flag = false              -- True while wearing a ghillie suit
+local surface = false             -- True when the actor currently walks on a camo-friendly surface
+local camo_surfaces = {"earth", "dirt", "grass", "bush"}  -- Surfaces that grant ghillie camo
+local ghil_blindness_koeff = 100  -- Camouflage coefficient granted by the ghillie suit
+
+vis_acc = {}      -- Global: accumulated visibility per NPC id (their detection progress toward the threshold)
+vis_last = {}     -- Global: timestamp of the last visibility evaluation per NPC id
+vis_decay = {}    -- Global: per-NPC timestamp of the last applied calm-down step (for the exponential decay)
+alarm_boost = {}  -- Global: per-NPC alarm deadline (ms) set by noise/monster alerts
+
+-- Cached MCM settings for performance. Reading from MCM is slow, so we read them once
+-- and on change, and store them in this local table for fast access inside the
+-- performance-critical get_visible_value() hook.
+local cfg = {}
+function update_mcm_cache()
+	cfg.memory = stealth_mcm.get_config("memory")
+	cfg.luminocity = stealth_mcm.get_config("luminocity")
+	cfg.distance = stealth_mcm.get_config("distance")
+	cfg.velocity = stealth_mcm.get_config("velocity")
+	cfg.weight = stealth_mcm.get_config("weight")
+	cfg.crouch = stealth_mcm.get_config("crouch")
+	cfg.low_crouch = stealth_mcm.get_config("low_crouch")
+	cfg.michiko_patch = stealth_mcm.get_config("michiko_patch")
+	cfg.nvg_val = stealth_mcm.get_config("nvg_val")
+	cfg.scent = stealth_mcm.get_config("scent")
+	cfg.adaptation = stealth_mcm.get_config("adaptation")
+	cfg.glare = stealth_mcm.get_config("glare")
+	cfg.community = stealth_mcm.get_config("community")
+	cfg.npc_nvg = stealth_mcm.get_config("npc_nvg")
+	cfg.squad_alert_range = stealth_mcm.get_config("squad_alert_range")
+	cfg.squad_alert_dur = stealth_mcm.get_config("squad_alert_dur")
+end
+
+-- Persistent "nervous squad" system: after a silent takedown, the victim's
+-- squad id is stored (db.storage, survives saves) with the kill timestamp.
+-- Squad members who are online within the window get a perception bonus.
+local nervous_window = 120000        -- How long a squad stays nervous (ms)
+local nervous_mult = 1.35            -- Perception multiplier while nervous
+nervous_squads = {}                  -- Global: squad id -> kill timestamp (ms)
+local nervous_storage_key = "stealth_nervous_squads"  -- db.storage key (single namespaced entry)
+
+function mark_squad_nervous(squad_id, t)
+	-- Record a squad as "nervous" (called by stealth_takedown after a kill)
+	if not squad_id then return end
+	local ts = t or time_global()                     -- Kill timestamp
+	nervous_squads[squad_id] = ts                     -- In-memory record (fast lookup)
+	local ok, st = pcall(function() return db.storage[nervous_storage_key] end)
+	if ok and st and type(st) == "table" then
+		st[squad_id] = ts                             -- Persistent record (survives saves)
+	elseif ok then
+		db.storage[nervous_storage_key] = {[squad_id] = ts}  -- Create the persistent table
+	end
+end
+
+local function squad_is_nervous(squad_id)
+	-- True while the squad id is in the nervous list and its kill is recent
+	local ts = nervous_squads[squad_id]               -- In-memory lookup first
+	if ts and time_global() - ts < nervous_window then return true end
+	local ok, st = pcall(function() return db.storage[nervous_storage_key] end)
+	if ok and st and type(st) == "table" then
+		ts = st[squad_id]                             -- Fall back to the persistent record
+		nervous_squads[squad_id] = ts                 -- Cache it in memory
+		return ts and time_global() - ts < nervous_window
+	end
+	return false
+end
+
+local community_mult = {  -- Perception multiplier per faction
+	["army"]		= 1.3,   -- Army: sharpest eyes
+	["military"]	= 1.3,
+	["mercenary"]	= 1.2,
+	["monolith"]	= 1.2,
+	["greh"]		= 1.2,
+	["dolg"]		= 1.1,
+	["svoboda"]		= 1.1,
+	["stalker"]		= 1.0,   -- Neutral baseline
+	["bandit"]		= 0.95,
+	["renegade"]	= 0.9,
+	["ecolog"]		= 0.85,  -- Ecologists: poorest eyes
+}
+
+function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_factor,velocity,distance,object_distance,always_visible_distance)
+	-- MAIN ENGINE HOOK: called by the engine during its visibility check for every
+	-- (npc, who) pair. The returned value is ADDED to the npc's visibility;
+	-- if it reaches visibility_threshold, the npc sees the object.
+	distance = distance <= 0 and 0.00001 or distance  -- Guard against division by zero in distance
+
+	-- Allies don't perceive the actor as a threat: they never accumulate
+	-- detection against him (eye icon, engine visibility state).
+	if who and npc and who:id() == db.actor:id() and npc:id() ~= AC_ID and IsStalker(npc) and npc:alive() then  -- npc evaluating the actor (stalkers only: monsters have no goodwill -> GetAttitude crashes)
+		local ok, gw = pcall(function() return npc:general_goodwill(db.actor) end)  -- Read goodwill safely
+		if ok and gw and gw >= (game_relations and game_relations.FRIENDS or 1000) then
+			return 0  -- Friendly NPC: never detects the actor
+		end
+	end
+
+--============= luminosity =============
+	local npcxnpc_flash = false	-- Boosts NPC's vision when they see other NPC with active flashlight from afar, change to 'false' if you feel like it tanks your FPS too hard
+
+	-- main
+	local michiko_patch = cfg.michiko_patch  -- Alternative night-luminosity curve flag
+	local hrs = level.get_time_hours() + level.get_time_minutes() / 60  -- Current time of day in hours (fractional)
+	local who_lum = who:get_luminocity()  -- Light level at the seen object ("who")
+	local lumin_r1 = luminocity <= 0 and 0.0001 or luminocity  -- r1 renderer light value (never 0)
+	local lumin_r2 = (who_lum + who_lum^0.5 + lights_lum()) / 3.02  -- Combined light: object + sqrt + global sun/hemisphere
+
+	-- night vision: only NPCs that actually own NVG (rank-gated, stealth_nvg) get the boost
+	local npc_nvg_on = cfg.npc_nvg  -- NVG system enabled in MCM
+	local npc_has_nvg = npc_nvg_on and stealth_nvg and stealth_nvg.has_nvg and stealth_nvg.has_nvg(npc) or false  -- This NPC owns NVGs?
+	local nvg_val = npc_has_nvg and (cfg.nvg_val or 1) or 1  -- Their NVG sight multiplier
+	local lumin_r2_night = clamp((lumin_r2 * 2)^1.6, 0.01, 0.99) * nvg_val  -- Night light curve (steep), scaled by NVG
+	local lumin_r2_night_michiko = clamp(((lumin_r2 * 7)^3), 0.01, 0.99)  -- Michiko variant: even steeper/brighter
+	lumin_r2_night = michiko_patch and lumin_r2_night_michiko or lumin_r2_night  -- Pick the active curve
+
+	local is_night = (hrs > 21 or hrs < 4)           -- Classic night window
+	local is_night_michiko = (hrs > 21 or hrs < 5)   -- Michiko night window (longer)
+	is_night = michiko_patch and is_night_michiko or is_night  -- Pick the active window
+
+	lumin_r2 = is_night and lumin_r2_night or lumin_r2  -- Use the night curve during night hours
+
+	luminocity = is_r1 and lumin_r1 or lumin_r2      -- Final luminosity per renderer
+
+	-- campfire/underground
+	luminocity = luminocity + (campfire_npcs[who:id()] or 0)  -- Bonus light for NPCs near a burning campfire
+
+	if level_weathers.bLevelUnderground then
+		luminocity = luminocity + 0.35  -- Underground always has some ambient light
+	end
+
+	-- flashlights
+	local torch = db.actor:item_in_slot(10)  -- Actor's torch item
+	local flash = db.actor:item_in_slot(9)   -- Actor's detector item
+	local npc_torch = (npc and IsStalker(npc) and npc:object("device_torch"))  -- NPC's torch device
+	local who_torch = (who and IsStalker(who) and who:object("device_torch"))  -- Seen person's torch device
+	local who_dist = 20 / object_distance     -- Light falloff factor for the actor's light
+	local npc_dist = 10 / object_distance     -- Light falloff factor for the NPC's light
+
+	local luminocity_flash_r2 = luminocity    -- Base value the flash modifiers build on
+	local actor_torch_active = (who and (who:id() == db.actor:id()) and ( (torch and torch:torch_enabled()) or (flash and (flash:section() == "device_flashlight") and db.actor:active_detector()) ))  -- Actor's own light is on
+	local luminocity_flash_actor_r2 = luminocity_flash_r2 + who_dist  -- Lit actor seen from afar: extra visibility
+	local npc_torch_active = (npc_torch and npc_torch:attachable_item_enabled() and (object_distance <= 25 and distance > 90))  -- NPC's torch active while the actor is far
+	local luminocity_flash_npc_r2 = luminocity_flash_r2 + npc_dist  -- Lit NPC: slightly easier to see
+	local npc_to_npc_torch_active = npcxnpc_flash and who_torch and who_torch:attachable_item_enabled()  -- NPC lit by another NPC's torch
+
+	luminocity_flash_r2 = (actor_torch_active or npc_to_npc_torch_active) and luminocity_flash_actor_r2 or luminocity_flash_r2  -- Apply the lit-actor boost
+	luminocity_flash_r2 = npc_torch_active and luminocity_flash_npc_r2 or luminocity_flash_r2  -- Apply the lit-NPC boost
+
+	luminocity = is_r1 and luminocity or luminocity_flash_r2  -- Use the flash-corrected value (r2 only)
+
+--======== camo/weight ====================
+	local camo_checks = get_camo_k > 0 and velocity == 0 and object_distance >= 30 and (not g_flag or surface)  -- Cammo applies only when standing still, far away, on a matching surface
+	local camo_dist = 1 - object_distance * 0.01     -- Camo effectiveness fades with distance
+	local camo_tot = get_camo_k / 20 * camo_dist     -- Normalize the camo coefficient
+	camo_tot = clamp(camo_tot, 0.02, 1.0)            -- Keep it in a sane range
+	camo_tot = camo_tot * (1 - level.rain_factor() * 0.5)  -- Rain washes out camo
+	if is_night and get_camo_k > 0 then camo_tot = camo_tot * 1.3 end  -- Camo works better at night
+	local camo_x = camo_checks and camo_tot or 1     -- Final camo multiplier (1 = no camo bonus)
+
+	local w = db.actor:get_total_weight()            -- Actor's carried weight in kg
+	local wei = math.exp(w/100)                      -- Exponential weight factor (heavy = loud/bulky)
+	local odw = 1.1 - 0.02 * object_distance         -- Weight visibility drops with distance
+	local obj_dist_w = odw > 0.01 and odw or 0.01    -- Clamp the distance weight factor
+
+--====== crouch/danger_mult/scheme_mult ===========
+	local cr = IsMoveState('mcCrouch')               -- Actor is crouched
+	local acc = IsMoveState('mcAccel')               -- Actor is moving fast
+	local crouch = (cr and (not acc)) and (cfg.crouch) or 1  -- Crouched standing still: reduced detection
+	crouch = (cr and acc) and (cfg.low_crouch) or crouch  -- Crouch + movement: even lower
+
+	local npc_alive = npc and npc:alive()            -- The evaluating NPC is alive
+	local is_mutant = npc_alive and IsMonster(npc)   -- The NPC is a mutant
+	local is_stalker = npc_alive and IsStalker(npc)  -- The NPC is a stalker
+	local danger_mult = is_mutant and (0.003 / time_quant) or 1  -- Mutants accumulate danger differently (engine-relative)
+	danger_mult = is_stalker and (time_quant * 2) or danger_mult  -- Stalkers accumulate faster per quant
+
+	if is_mutant and cfg.scent and who and who:id() == db.actor:id() then  -- Scent: mutant smelling the bleeding actor
+		local bleed = db.actor.bleeding or 0          -- Actor's bleeding level
+		if bleed > 0.05 and distance < (20 + bleed * 40) then  -- Close enough for the scent to carry
+			danger_mult = danger_mult * (1 + bleed * 2)  -- More blood = easier to smell
+		end
+	end
+
+	local scheme_mult = 1                            -- Multiplier based on the NPC's current AI scheme
+	if npc_alive then
+		local st = db.storage[npc:id()]              -- NPC's storage entry
+		if st then
+			local as = st.active_scheme              -- Current AI scheme name
+			if (as == "guard" or as == "sniper") then
+				scheme_mult = 0.5                    -- Guards/snipers on watch are less perceptive
+			elseif (as == "search" or as == "threat_danger") then
+				scheme_mult = 1.5                    -- Searching/alarmed NPCs are more perceptive
+			elseif (as == "raid") then
+				scheme_mult = 1.25                   -- Raiding NPCs slightly more perceptive
+			end
+		end
+	end
+
+	local comm_mult = 1                              -- Faction perception multiplier
+	if npc_alive and IsStalker(npc) and cfg.community then
+		comm_mult = community_mult[character_community(npc)] or 1  -- Look up the NPC's faction (default 1)
+	end
+
+	local nervous_squad_mult = 1                     -- "Nervous squad" perception multiplier
+	if npc_alive and IsStalker(npc) and next(nervous_squads) then  -- Only when some squad is on edge
+		local squad_ok, squad = pcall(function() return get_object_squad(npc) end)
+		if squad_ok and squad then
+			local sid_ok, sid = pcall(function() return squad:id() end)
+			if sid_ok and squad_is_nervous(sid) then
+				nervous_squad_mult = nervous_mult    -- Squad mate was silently taken down recently -> on edge
+			end
+		end
+	end
+	
+--============ memory ====================
+	local tg = time_global()                         -- Current engine time in ms
+	local memory_factor = 0                          -- How strongly "last known position" memory contributes
+	local mcm_memory = cfg.memory  -- Memory strength from MCM
+
+	if npc and npc:alive() and who and (IsStalker(who) or IsMonster(who)) and who:alive() then  -- Both sides valid
+		local see = npc:see(who)                     -- NPC currently sees "who"
+		local vis_memory_t = vision_memory[npc:id()] and vision_memory[npc:id()][who:id()] or nil  -- Did we already record a sighting?
+		if (see) and (not (vis_memory_t)) then
+			-- First time the NPC sees the actor -> record it and possibly alert squadmates
+			vision_memory[npc:id()] = {}             -- Create the inner table
+			vision_memory[npc:id()][who:id()] = true -- Mark the sighting
+			if who:id() == AC_ID and IsStalker(npc) then  -- Actor was seen by a stalker
+				local squad_alert_range = cfg.squad_alert_range  -- MCM: squad alert radius (0 = off)
+				local squad_alert_dur = cfg.squad_alert_dur      -- MCM: squad alert duration
+				local squad = get_object_squad(npc)  -- Their squad
+				if squad and squad_alert_range > 0 then
+					local r2 = squad_alert_range ^ 2   -- Squared range for distance checks
+					for m in squad:squad_members() do  -- Loop over squad members
+						local mid = m.id             -- Member id
+						if mid ~= npc:id() and db.storage[mid] and db.storage[mid].object then  -- Other online member
+							local member = db.storage[mid].object
+							if member:alive() and member:position():distance_to_sqr(npc:position()) < r2 then  -- Within MCM range
+								alarm_boost[mid] = time_global() + squad_alert_dur  -- Boost their detection for the duration
+							end
+						end
+					end
+				end
+			end
+		elseif (not (see)) and (vis_memory_t) then
+			-- NPC has seen the actor before but lost sight -> they remember, contributing to detection
+			local mem_time = (tg - npc:memory_time(who)) * 0.001  -- Seconds since the last sighting
+			local mem_time_factor =  7.5 * (1 / mem_time)^2.5     -- Memory fades on a steep ease-out curve: strong right after contact, negligible after ~15-20 s (was ^2 before -> lingered for a minute)
+			local vis_threshold = npc:visibility_threshold()      -- Their threshold scales the memory contribution
+			memory_factor = mcm_memory * mem_time_factor * vis_threshold			-- 35 threshold: 3 sec = 16.8 ; 5 sec = 4.7 ; 10 sec = 0.83 ; 20 sec = 0.15
+		end
+	end
+
+	memory_factor = (memory_factor > 0.01) and memory_factor or 0  -- Ignore negligible memory values
+	
+	if npc and marked[npc:id()] and marked[npc:id()] > tg then
+		actor_marked = 50000                          -- NPC was hit unseen by the actor -> detection jumps to maximum
+	else
+		actor_marked = 0                              -- Normal: no mark bonus
+	end
+
+--======== adaptation / glare / night vision / squad alarm ==========
+	local adapt = 1                                  -- Eye-adaptation multiplier
+	if cfg.adaptation and who and who:id() == db.actor:id() then  -- Only applies to NPCs evaluating the actor
+		if who_lum < 0.2 and npc_alive and IsStalker(npc) then  -- The actor is in the dark
+			local nl = npc:get_luminocity()           -- NPC's own ambient light
+			if nl and nl > 0.35 then adapt = 0.6 end  -- NPC coming from a bright area -> worse night vision (0.6x)
+		end
+	end
+
+	local glare = 1                                  -- Backlight-glare multiplier
+	if cfg.glare and who and who:id() == db.actor:id() and npc_alive and IsStalker(npc) then  -- Stalker looking at the actor
+		local actor_light_on = (torch and torch:torch_enabled()) or (flash and (flash:section() == "device_flashlight") and db.actor:active_detector())  -- Actor's light is on
+		if actor_light_on then
+			local dir = vector():set(npc:position()):sub(db.actor:position())  -- Vector NPC -> actor
+			local ml = dir:magnitude()                -- Distance between them
+			if ml > 0.01 then
+				dir:mul(1 / ml)                       -- Normalize the direction
+				if db.actor:direction():dotproduct(dir) > 0.94 then  -- Actor faces the NPC almost exactly (light in their eyes)
+					glare = 0.55                      -- NPC is blinded -> 0.55x detection
+					if stealth_noise and stealth_noise.suspect then
+						stealth_noise.suspect(npc, 3000)  -- Mark the NPC as suspect for 3 s
+					end
+				end
+			end
+		end
+	end
+
+	local npc_nvg_mult = 1                           -- NPC night-vision multiplier
+	if npc_alive and IsStalker(npc) and cfg.npc_nvg then  -- System enabled
+		if is_night and npc:object("device_nvg") and npc:object("device_nvg"):attachable_item_enabled() then  -- NPC wearing active NVG at night
+			npc_nvg_mult = 1.4                        -- They see 1.4x better
+		end
+	end
+
+	local alarm = npc_alive and alarm_boost[npc:id()] and alarm_boost[npc:id()] > tg and 1.6 or 1  -- Alarmed NPC detects 1.6x faster while boosted
+	
+--============== total =============================
+	local shot_mult = pewpewmult + (who and muzzle_t[who:id()] or 0)  -- Boost from the actor's shot / NPC muzzle flashes
+	local eq_dist = ((distance - object_distance / 1.15) / distance) * cfg.distance  -- Distance factor (close = high), MCM scaled
+	local lum_dist = (distance - object_distance / 1.35) / distance  -- Pure light-distance falloff
+	local Velocity = (1 + velocity_factor * velocity) * cfg.velocity  -- Movement visibility, MCM scaled
+	local wnj = wei * jacketmult * obj_dist_w * cfg.weight  -- Combined weight/outfit factor
+	local weight = wnj > 1 and wnj or 1               -- Minimum 1 (no weight penalty for light loads)
+	local Luminocity = (33 * luminocity * lum_dist + shot_mult) * cfg.luminocity  -- Final light + gunshot term, MCM scaled
+	local step_incr = Luminocity * Velocity * eq_dist * weight * crouch * danger_mult * camo_x * scheme_mult * comm_mult * nervous_squad_mult * adapt * glare * npc_nvg_mult * alarm + memory_factor + actor_marked  -- FINAL visibility increment for this engine call
+--===============================================
+
+	if who and who:id() == db.actor:id() and npc_alive then  -- NPC evaluating the actor: track for the HUD
+		local nid = npc:id()                           -- NPC id
+		local thr = npc:visibility_threshold()         -- Their detection threshold
+		if npc:see(who) then
+			vis_acc[nid] = thr                         -- Actively seen -> detection capped at the threshold
+			vis_decay[nid] = time_global()             -- Reset the calm clock so the decay starts fresh when they lose sight
+		else
+			-- Not seen: let the meter calm down along a smooth exponential curve
+			-- (fast drop right after losing sight, gentle tail), while still adding
+			-- whatever new detection still accrues (noise, memory, footsteps...).
+			local tg_now = time_global()               -- Current time in ms
+			local d_last = vis_decay[nid] or tg_now    -- When the last decay step was applied
+			local dt = (tg_now - d_last) * 0.001       -- Seconds since that step
+			vis_decay[nid] = tg_now                    -- Remember this step
+			local keep = 0.5 ^ (dt / 2.5)              -- Halve the stored value every 2.5 s (ease-out curve)
+			vis_acc[nid] = (vis_acc[nid] or 0) * keep + step_incr  -- Decay + fresh increment
+			if vis_acc[nid] > thr then vis_acc[nid] = thr end  -- Cap at the threshold
+		end
+		vis_last[nid] = time_global()                  -- Record when we last evaluated them
+	end
+
+
+-- ==== dbg ==========
+	if (cfg.debugx) then         -- Debug mode: print detection breakdown for the targeted NPC
+		local wthrs = level_weathers.get_weather_manager():get_curr_weather_preset()  -- Current weather preset name
+		local obj = level.get_target_obj()             -- The NPC under the crosshair
+		local r = round_idp                            -- Helper to round numbers for printing
+
+		if (obj and (obj:alive()) and (who and (who:id() == db.actor:id() or who:id() == obj:id() ) and npc and (npc:id() == db.actor:id() or npc:id() == obj:id() ))) and (not obj:see(db.actor)) then  -- Relevant pair, target not seeing the actor
+			summ = summ + step_incr                    -- Accumulate the target's detection
+		elseif obj and obj:see(db.actor) then
+			summ = 0                                   -- Target spotted -> reset the counter
+			news_manager.send_tip(db.actor, "Spotted", 0, nil, 1500)  -- Show the "Spotted" tip
+		end
+
+		if obj and (obj:alive()) and (who and (who:id() == db.actor:id() or who:id() == obj:id() ) and npc and (npc:id() == db.actor:id() or npc:id() == obj:id() )) then  -- Relevant pair -> print the breakdown
+			printf('---------------------------------------------------------------')
+			printf("Weather is: " .. (wthrs))
+			printf("1. Luminocity  ---------- %s", Luminocity)
+			printf("1.a) luminocity --------- %s", luminocity)
+			printf("1.b) lights_lum() ------- %s", lights_lum())
+			printf("1.c) who:get_lum() ---- %s", who:get_luminocity())
+			printf("2. Velocity ------------- %s", Velocity)
+			printf("3. dist_original --------- %s", distance)
+			printf("4. weight&outfit ------- %s", weight)
+			printf("5. crouch ------------- %s", crouch)
+			printf("6.a) shot_mult --------- %s", shot_mult)
+			printf("6.b) danger ------------ %s", danger_mult)
+			printf("6.c) camo ------------- %s", camo_x)
+			printf("6.d) ai scheme --------- %s", scheme_mult)
+			printf("6.e) get_camo_k ------ %s", get_camo_k)
+			printf("6.f) jacketmult --------- %s", jacketmult)
+			printf("7. memory ------------- %s", memory_factor)
+			printf("8. Step incr --- %s", step_incr)
+			actor_menu.set_msg(1, strformat("Threshold: %s/%s || (Lumin: %s | Veloc: %s | Dist: %s | Weight: %s | Memory: %s || Total per update: %s)", r(summ,2), obj:visibility_threshold(), r(Luminocity,2), r(Velocity,2), r(eq_dist,2), r(weight,2), r(memory_factor,2), r(step_incr,2) ))  -- One-line summary in the actor menu
+		end
+
+		if obj == nil then
+			summ = 0                                   -- No target -> reset the counter
+		end
+
+	end
+--===============================================
+
+
+	return step_incr  -- Return the visibility increment to the engine
+end
+
+--======== luminosity extra ====================
+function andruxa(animegif)
+	-- Convert an RGB vector to a single luminance scalar (perceived brightness weights)
+	return 0.21 * animegif.x + 0.72 * animegif.y + 0.07 * animegif.z
+end
+
+function lights_lum(andre)
+	-- Global ambient light: the brighter of the sun and hemisphere light
+	local andlum = andre                             -- Optional override value
+	local andsun =  andruxa(weather.get_value_vector("sun_color"))  -- Luminance of the sun colour
+	local andhem = andruxa(weather.get_value_vector("hemisphere_color"))  -- Luminance of the hemisphere light
+	andlum = (math.max(andhem, andsun))              -- Use whichever is brighter
+
+	return andlum
+end
+
+-- dynamic campfire lighting (ported from "NPC's can't see through foliage 1.8.2")
+function set_campfire_val()
+	-- Recompute which NPCs stand near a burning campfire (throttled to 1 Hz)
+	local tg = time_global()
+	if tg < cf_tmr then return end                   -- Not yet due -> skip
+	cf_tmr = tg + 1000                               -- Next scan in 1 s
+
+	for sid, ts in pairs(nervous_squads) do          -- Prune expired nervous squads (1 Hz, cheap: table is tiny)
+		if tg - ts >= nervous_window then
+			nervous_squads[sid] = nil                 -- Window over -> drop from memory
+		end
+	end
+
+	empty_table(campfire_npcs)                       -- Clear the previous frame's data
+
+	if not (bind_campfire and bind_campfire.campfires_all) then return end  -- Campfire module not available -> skip
+
+	for id, binder in pairs(bind_campfire.campfires_all) do  -- Loop over all campfire binders
+		if (binder and binder.campfire and binder.campfire:is_on()) then  -- Campfire is burning
+			level.iterate_nearest(binder.object:position(), 7, function(who)  -- Scan a 7 m radius
+				if (who and (IsStalker(who) or IsMonster(who)) and who.alive and who:alive()) then  -- Living NPC/monster
+					campfire_npcs[who:id()] = 0.4     -- Grant them +0.4 luminosity
+				end
+			end)
+		end
+	end
+end
+
+function actor_on_weapon_fired()
+	-- The actor fired a non-silenced weapon -> huge temporary visibility boost
+	local wpn = db.actor:active_item()                -- The fired weapon
+	if not (wpn) then return end                      -- None -> skip
+	if not (IsWeapon(wpn)) or IsMelee(wpn) or wpn:weapon_is_silencer() then return end  -- Only loud ranged weapons
+
+	pewpewmult = 7                                    -- +7 visibility for 0.16 s
+	CreateTimeEvent("xcvb", "wpn_fired_stop", 0.16, wpn_fired_stop)  -- Schedule the reset
+
+end
+
+function wpn_fired_stop()
+		pewpewmult = 0                                -- End the shot boost
+    return true                                       -- (time-event callback must return true)
+end
+
+-- NPC muzzle flashes (ported from "NPC's can't see through foliage 1.8.2")
+local correct_game_ver = GAME_VERSION and string.find(GAME_VERSION, "1.5.2")  -- Only for Anomaly 1.5.2+
+if correct_game_ver and xr_motivator and xr_motivator.motivator_binder then  -- Required systems present
+	local cb_ok = pcall(AddScriptCallback, "npc_on_weapon_fired")  -- Try to register the callback
+	if cb_ok then
+		local mf_orig = xr_motivator.motivator_binder.weapon_fired  -- Save the original method
+		function xr_motivator.motivator_binder:weapon_fired()       -- Override it to broadcast a callback
+			if mf_orig then mf_orig(self) end          -- Run the original behaviour first
+			SendScriptCallback("npc_on_weapon_fired", self.object, self.object:active_item())  -- Notify listeners
+		end
+	end
+end
+
+function npc_on_net_spawn(npc)
+	-- A new NPC spawned: hook its weapon-fired callback so muzzle flashes work
+	if not (npc and IsStalker(npc) and npc.alive and npc:alive()) then return end  -- Only alive stalkers
+	local binder = npc.binded_object and npc:binded_object()  -- The NPC's binder
+	if not binder then return end                     -- No binder -> skip
+	npc:set_callback(callback.weapon_fired, binder.weapon_fired, binder)  -- Re-register the overridden callback
+end
+
+function npc_on_weapon_fired(npc, wpn)
+	-- An NPC fired a loud weapon -> they become highly visible for a moment
+	if not (wpn) then return end                      -- No weapon -> skip
+	if not (IsWeapon(wpn)) or IsMelee(wpn) or wpn:weapon_is_silencer() then return end  -- Only loud ranged weapons
+	if not (npc and IsStalker(npc) and npc.alive and npc:alive()) then return end  -- Only alive stalkers
+
+	local npc_id = npc:id()                            -- NPC id
+	muzzle_t[npc_id] = 7                               -- +7 visibility for 0.2 s
+
+	local function wpn_fired_stop(id)                  -- Local reset callback
+		muzzle_t[id] = 0                               -- Clear the boost
+		return true                                    -- (time-event callback must return true)
+	end
+	CreateTimeEvent("stealth_wpn_fired_e_" .. npc_id, "stealth_wpn_fired_a_" .. npc_id, 0.2, wpn_fired_stop, npc_id)  -- Schedule the reset
+end
+
+function icon_lum()
+	-- Light value used by the light-gem HUD icon
+	local act_lum = db.actor:get_luminocity()          -- Light at the actor
+	local dblum = (act_lum + act_lum^0.5 + lights_lum()) / 3 + (campfire_npcs[AC_ID] or 0)  -- Combined: actor + global + campfire
+	local luminocity_icon = is_r1 and (act_lum)^0.7 or dblum  -- Renderer-dependent formula
+
+	return luminocity_icon
+end
+
+--========== outfit/camo =================
+function slot_in_out(obj)
+	-- Called whenever an item enters/leaves a slot: update outfit camo and jacket factors
+	if not IsOutfit(obj) then return end               -- Only react to outfit changes
+
+	local outfit = db.actor:item_in_slot(7)             -- Equipped outfit
+	local kind = outfit and ini_sys:r_string_ex(outfit:section(),"kind")  -- Its "kind" (o_light/o_medium/...)
+	local get_camo_get_line = outfit and ini_sys:line_exist(outfit:section(), "npc_blindness_koeff")  -- Does it define a camo coefficient?
+	local outfit_camo = get_camo_get_line and ini_sys:r_float(outfit:section(), "npc_blindness_koeff") or 0  -- Its camo value (0 if absent)
+	jacketmult = kind and jacket_t[kind] or 1           -- Map the outfit kind to its detection multiplier
+
+	local backpack = db.actor:item_in_slot(13)          -- Backpack slot item
+	if backpack and (backpack:section() == "ghillie_outfit") then  -- Wearing a ghillie suit
+		g_flag = true                                    -- Flag ghillie mode
+		get_camo_k = surface and ghil_blindness_koeff or 0  -- Camo only while standing on a natural surface
+	else
+		g_flag = false                                   -- Not a ghillie
+		get_camo_k = outfit_camo                         -- Use the outfit's own camo value
+	end
+end
+
+-- terrain-dependent camo (ported from "NPC's can't see through foliage 1.8.2")
+function actor_on_footstep(mat)
+	-- Called on each actor footstep with the material name underfoot
+	local found = false
+	for n, val in next, camo_surfaces do                -- Check against camo-friendly materials
+		if string.find(mat, val) then
+			found = true                                 -- Standing on a natural surface
+			break
+		end
+	end
+	surface = found                                      -- Remember the surface state
+	if g_flag then
+		get_camo_k = found and ghil_blindness_koeff or 0  -- Ghillie camo only works on natural surfaces
+	end
+end
+
+function actor_on_first_update()
+	-- First actor update: initialize the outfit factors for all slots
+	for i=1,13 do
+		local obj = db.actor:item_in_slot(i)             -- Item in slot i
+		slot_in_out(obj)                                 -- Process it (updates jacket/camo)
+	end
+
+end
+
+function npc_on_before_hit(npc,shit,bone_id,flags)
+	-- The actor hit an NPC that did NOT see him -> mark him and his squad (they get "marked" -> max detection later)
+	if not npc or not npc:alive() then return end  -- Engine fires this even for dead objects; see() on a corpse errors out
+	if shit and shit.draftsman and shit.draftsman:id() == db.actor:id() then         -- The attacker is the actor
+		if npc:see(db.actor) then 
+			return                                        -- NPC saw the hit coming -> no mark
+		else
+			local tg = time_global()
+			marked[npc:id()] = tg + MARK_DURATION        -- Mark the hit NPC (expires; refreshed by a new unseen hit)
+			local squad = get_object_squad(npc)          -- Their squad
+			if squad and squad.commander_id then
+				for m in squad:squad_members() do        -- Mark every online squad member
+					local member = level.object_by_id(m.id)
+					if member and member.alive and member:alive() then
+						marked[member:id()] = marked[member:id()] or true
+						marked[member:id()] = tg + MARK_DURATION
+					end
+				end
+			end
+		end
+	end
+end
+
+--===================================
+function on_game_start()
+	-- Restore the persistent nervous-squad table into memory (db.storage survives saves)
+	local ok, st = pcall(function() return db.storage[nervous_storage_key] end)
+	if ok and st and type(st) == "table" then
+		for sid, ts in pairs(st) do
+			nervous_squads[sid] = ts                  -- Reload into the fast in-memory table
+		end
+	end
+	-- Populate the MCM settings cache on game start and register for changes
+	update_mcm_cache()
+	RegisterScriptCallback("on_option_change", update_mcm_cache)
+
+	-- Register all engine callbacks for this module
+	RegisterScriptCallback("actor_on_update", set_campfire_val)         -- Periodic campfire lighting scan
+	RegisterScriptCallback("actor_on_footstep", actor_on_footstep)      -- Track terrain underfoot (camo)
+	RegisterScriptCallback("actor_on_weapon_fired", actor_on_weapon_fired)  -- Actor gunshot visibility boost
+	RegisterScriptCallback("actor_item_to_slot", slot_in_out)           -- Re-evaluate outfit factors when equipping
+	RegisterScriptCallback("actor_item_to_ruck", slot_in_out)           -- Re-evaluate when unequipping
+	RegisterScriptCallback("actor_on_item_drop", slot_in_out)           -- Re-evaluate when dropping items
+	RegisterScriptCallback("actor_on_first_update", actor_on_first_update)  -- One-time outfit initialization
+	RegisterScriptCallback("npc_on_before_hit", npc_on_before_hit)      -- Mark NPCs hit unseen
+	if correct_game_ver then                                            -- 1.5.2-only muzzle-flash wiring
+		RegisterScriptCallback("npc_on_net_spawn", npc_on_net_spawn)    -- Hook NPC callbacks on spawn
+		RegisterScriptCallback("npc_on_weapon_fired", npc_on_weapon_fired)  -- NPC muzzle flash visibility
+	end
+end
