@@ -12,13 +12,18 @@ online_npcs = {}        -- Global registry: game object id -> true for every ali
 current_radius = 0      -- Global: the actor's current noise radius in metres (read by the HUD bar)
 
 local cached_noise = {
-    outfit_obj = nil,
+    outfit_id   = nil,   -- ID of the equipped outfit (number), or nil
     outfit_mult = 1.0,
-    art_mult = 1.0,
-    belt_items = {}
+    art_mult    = 1.0,
+    belt_ids    = {}     -- Slot ID -> item ID (number) or nil
 }
 for i=8,19 do
-    cached_noise.belt_items[i] = nil
+    cached_noise.belt_ids[i] = nil
+end
+
+-- Safe helper: returns the object's numeric ID, or nil if the object is absent.
+local function obj_id(obj)
+    return obj and obj:id() or nil
 end
 
 local base_radius = {   -- Base noise radius (metres) per movement state
@@ -277,10 +282,11 @@ local function compute_radius()
 	-- Other multipliers (accumulated in 'mult')
 	local mult = 1.0
 
-	-- Outfit (cached value)
+	-- Outfit (cached via ID to avoid __eq crash on game_object)
 	local current_outfit = a:item_in_slot(7)
-	if current_outfit ~= cached_noise.outfit_obj then
-		cached_noise.outfit_obj = current_outfit
+	local current_outfit_id = obj_id(current_outfit)
+	if current_outfit_id ~= cached_noise.outfit_id then
+		cached_noise.outfit_id = current_outfit_id
 		if current_outfit then
 			local outfit_sect = current_outfit:section()
 			if ini_sys:line_exist(outfit_sect, "noise_k") then
@@ -304,10 +310,10 @@ local function compute_radius()
 	-- Rain (calculated always)
 	mult = mult * (1 - level.rain_factor() * 0.5)
 
-	-- Artifacts (cached value)
+	-- Artifacts (cached via IDs to avoid __eq crash on game_object)
 	local belt_changed = false
 	for i=8,19 do
-		if a:item_in_slot(i) ~= cached_noise.belt_items[i] then
+		if obj_id(a:item_in_slot(i)) ~= cached_noise.belt_ids[i] then
 			belt_changed = true
 			break
 		end
@@ -317,7 +323,7 @@ local function compute_radius()
 		local new_art_mult = 1.0
 		for i=8,19 do
 			local item = a:item_in_slot(i)
-			cached_noise.belt_items[i] = item -- Update the cache
+			cached_noise.belt_ids[i] = obj_id(item)  -- Store ID, not the object
 			if item then
 				local fx = artifact_effects[item:section()]
 				if fx and fx.noise then
