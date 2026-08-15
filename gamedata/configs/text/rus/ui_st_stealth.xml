@@ -98,6 +98,12 @@
 	<string id="ui_mcm_stealth_nvg_val_desc">
 		<text>Ночное зрение NPC, использующих ПНВ (сталкеры высоких рангов, отмеченные ночью видимой точкой). Чем выше значение, тем лучше они видят вас в темноте. Значение «0» отключает систему ПНВ. \n \n По умолчанию: 1.0</text>
 	</string>
+	<string id="ui_mcm_stealth_npc_flash">
+		<text>NPC flashlight vision</text>
+	</string>
+	<string id="ui_mcm_stealth_npc_flash_desc">
+		<text>When enabled, an NPC that sees another NPC with an active flashlight from afar gets a brief vision boost. Adds immersion but may reduce FPS on maps with many NPCs. Off by default.</text>
+	</string>
 	<string id="ui_mcm_stealth_michiko_patch">
 		<text>Патч для погоды Michiko</text>
 	</string>

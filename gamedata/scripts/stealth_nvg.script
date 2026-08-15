@@ -18,11 +18,11 @@ local nvg_rank_chance = {
 	["legend"] = 1.0,
 }
 
--- Rutas a los archivos de partículas de diferentes colores. Debes crear estos archivos .pe.
+-- Particle file paths for each relation colour. These .pe files must exist in particles/stealth_nvg/.
 local nvg_particle_paths = {
-	[game_object.friend] = "stealth_nvg\\nvg_dot_green",
-	[game_object.neutral] = "stealth_nvg\\nvg_dot_yellow", -- Ejemplo para neutrales
-	[game_object.enemy] = "stealth_nvg\\nvg_dot_red",
+	[game_object.friend]  = "stealth_nvg\\nvg_dot_green",
+	[game_object.neutral] = "stealth_nvg\\nvg_dot_yellow",
+	[game_object.enemy]   = "stealth_nvg\\nvg_dot_red",
 }
 
 local scuffed_sr_light_patch
@@ -53,14 +53,14 @@ function actor_on_update()
 	for npc_id, _ in pairs(stealth_nvg_ps) do
 		local npc = level.object_by_id(npc_id)
 
-		if npc and IsStalker(npc) then -- IsStalker también comprueba si está vivo
-			-- Determinar la partícula necesaria según la relación
+		if npc and IsStalker(npc) then -- IsStalker also checks alive()
+			-- Determine which particle colour is needed based on the relation to the actor
 			local rel = npc:relation(db.actor)
-			local required_path = nvg_particle_paths[rel] or nvg_particle_paths[game_object.enemy] -- Por defecto, rojo para relaciones desconocidas
+			local required_path = nvg_particle_paths[rel] or nvg_particle_paths[game_object.enemy] -- Default to red for unknown relations
 
 			local particle_info = particles_t[npc_id]
 
-			-- Si la partícula no existe o la relación ha cambiado, crear la partícula correcta
+			-- If the particle does not exist or the relation changed, (re)create it with the correct colour
 			if not particle_info or particle_info.path ~= required_path then
 				if particle_info and particle_info.obj then
 					stop_if_playing(particle_info.obj)
@@ -78,7 +78,7 @@ function actor_on_update()
 				stop_if_playing(particle)
 			end
 		else
-			-- El NPC está muerto, desconectado o no es un stalker. Limpiar.
+			-- NPC is dead, off-line, or not a stalker -> clean up its particle
 			local particle_info = particles_t[npc_id]
 			if particle_info and particle_info.obj then
 				stop_if_playing(particle_info.obj)

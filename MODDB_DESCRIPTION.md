@@ -47,9 +47,10 @@ If you know the original **Stealth 2.0.1**, this is everything it did — rework
 - Fixed stock bugs (NPCs alerting when you stand still, takedown crash, `xr_combat_ignore` condition, item-drop crash).
 - Performance: the HUD's line-of-sight checks run at half the rate (still smooth) for a cheaper per-frame cost.
 - **Script optimization**: redundant `camp_lum.script` removed (campfire lighting is handled by `visual_memory_manager.script`); the log folder path is cached after the first write; `light_gem`/`stealth_ui` cache all MCM settings (read once at start, refreshed on MCM change — not every frame); the hot `get_visible_value` detection path uses the cached values.
+- **Code quality (v5.12)**: fixed a `compute_radius()` duplicate in `stealth_noise` (the cached version with outfit/artifact caching was dead code — now fixed); `purge_stale()` throttled to 1 Hz; corpse-cleanup timer made deterministic; three dead `--[[...--]]` blocks removed from `xr_danger`.
 - Full Russian retranslation + cleaned Spanish strings, documented balance tips.
 
-**Every mechanic is toggleable via MCM — one section, 33 options.**
+**Every mechanic is toggleable via MCM — one section, 34 options.**
 
 ---
 

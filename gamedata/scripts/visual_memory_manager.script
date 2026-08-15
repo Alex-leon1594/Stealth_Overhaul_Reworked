@@ -51,6 +51,7 @@ function update_mcm_cache()
 	cfg.low_crouch = stealth_mcm.get_config("low_crouch")
 	cfg.michiko_patch = stealth_mcm.get_config("michiko_patch")
 	cfg.nvg_val = stealth_mcm.get_config("nvg_val")
+	cfg.npc_flash = stealth_mcm.get_config("npc_flash")
 	cfg.scent = stealth_mcm.get_config("scent")
 	cfg.adaptation = stealth_mcm.get_config("adaptation")
 	cfg.glare = stealth_mcm.get_config("glare")
@@ -124,7 +125,7 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	end
 
 --============= luminosity =============
-	local npcxnpc_flash = false	-- Boosts NPC's vision when they see other NPC with active flashlight from afar, change to 'false' if you feel like it tanks your FPS too hard
+	local npcxnpc_flash = cfg.npc_flash	-- Boosts NPC vision when they see another NPC with an active flashlight from afar (configurable via MCM; off by default due to potential FPS impact)
 
 	-- main
 	local michiko_patch = cfg.michiko_patch  -- Alternative night-luminosity curve flag

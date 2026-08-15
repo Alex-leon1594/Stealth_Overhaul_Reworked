@@ -158,7 +158,7 @@ function stealth_ui_update()
 	
 	-- Remove NPCs that are no longer alive or valid from the online_npcs registry
 	for _, id in ipairs(to_remove_from_online_npcs) do
-		stealth_noise.online_npcs[id] = nil
+		stealth_noise.remove_from_registry(id)  -- Use the public API instead of touching the table directly
 	end
 
 	if see_ok then seen_any = spotted end              -- Cache the fresh see() result for the next tick

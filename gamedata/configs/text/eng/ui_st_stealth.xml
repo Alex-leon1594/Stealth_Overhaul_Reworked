@@ -100,6 +100,13 @@
 	<string id="ui_mcm_stealth_nvg_val_desc">
 		<text>Night vision of NPCs that own NVGs (higher-rank stalkers, marked by a visible dot at night). Higher = they see you better in the dark. "0" disables the NVG system. \n \n Default: 1.0</text>
 	</string>
+
+	<string id="ui_mcm_stealth_npc_flash">
+		<text>NPC flashlight vision</text>
+	</string>
+	<string id="ui_mcm_stealth_npc_flash_desc">
+		<text>When enabled, an NPC that sees another NPC with an active flashlight from afar gets a brief vision boost. Adds immersion but may reduce FPS on maps with many NPCs. Off by default.</text>
+	</string>
 	<string id="ui_mcm_stealth_michiko_patch">
 		<text>Michiko weather patch</text>
 	</string>

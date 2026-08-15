@@ -19,6 +19,7 @@ local defaults = {          -- Fallback values used when MCM is not installed
 	["debugx"] = false,     -- Debug printing for the targeted NPC
 	["logging"] = true,     -- Write the dedicated log file (logs/stealth_overhaul.log)
 	["nvg_val"] = 1,        -- Night-vision multiplier for NPCs that own NVGs
+	["npc_flash"] = false,  -- Cross-NPC flashlight vision boost (may impact FPS on dense maps)
 	["noise"] = true,       -- Enable the footstep noise system
 	["noise_bar"] = true,   -- Show the HUD noise bar under the icon
 	["noise_bar_key"] = DIK_keys.DIK_F7,  -- Hotkey to toggle the noise bar in-game (0 = unbound)
@@ -66,12 +67,13 @@ function on_mcm_load()
 			{id = "icon_x", type = "input", val = 2, min = 0, max = 1000, def = 970},           -- Number input: icon X
 			{id = "icon_y", type = "input", val = 2, min = 0, max = 1000, def = 650},           -- Number input: icon Y
 			{id = "nvg_val", type = "track", val = 2, min=0,max=3,step=0.05, def = 1},          -- Slider: NPC NVG strength
-			{id= "divider", type = "line" },                                                    -- Visual separator
+			{id = "npc_flash", type = "check", val = 1, def = false},                           -- Checkbox: NPC cross-flashlight vision boost
+			{id= "divider_a", type = "line" },                                                  -- Visual separator
 			{id = "michiko_patch", type = "check", val = 1, def = false},                       -- Checkbox: harsher night curve
-			{id= "divider", type = "line" },
+			{id= "divider_b", type = "line" },
 			{id = "debugx", type = "check", val = 1, def = false},                              -- Checkbox: debug output
 			{id = "logging", type = "check", val = 1, def = true},                              -- Checkbox: dedicated log file
-			{id= "divider", type = "line" },
+			{id= "divider_c", type = "line" },
 			{id = "noise", type = "check", val = 1, def = true},                                -- Checkbox: noise system
 			{id = "noise_bar", type = "check", val = 1, def = true},                            -- Checkbox: noise HUD bar
 			{id = "noise_bar_key", type = "key_bind", val = 2, def = DIK_keys.DIK_F7, text = "ui_mcm_stealth_noise_bar_key"},  -- Hotkey: toggle the noise bar in-game
@@ -85,7 +87,7 @@ function on_mcm_load()
 			{id = "npc_nvg", type = "check", val = 1, def = true},                              -- Checkbox: NPC NVG system
 			{id = "takedown", type = "check", val = 1, def = true},                             -- Checkbox: silent takedowns
 			{id = "hide_corpse", type = "check", val = 1, def = true},                          -- Checkbox: corpse hiding
-			{id= "divider", type = "line" },
+			{id= "divider_d", type = "line" },
 			{id = "monster_alarm_radius", type = "track", val = 2, min=0,max=300,step=5, def = 150},  -- Slider: monster alarm radius (0 = off)
 			{id = "monster_alarm_dur", type = "track", val = 2, min=0,max=10000,step=500, def = 4000},  -- Slider: monster alarm duration
 			{id = "squad_alert_range", type = "track", val = 2, min=0,max=500,step=10, def = 200},  -- Slider: squad alert range (0 = off)

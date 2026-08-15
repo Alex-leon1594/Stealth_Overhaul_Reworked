@@ -1,4 +1,4 @@
-# Stealth_Overhaul_Reworked_v5.11
+# Stealth_Overhaul_Reworked_v5.12
 
 Complete stealth overhaul for **STALKER Anomaly** (GAMMA-compatible).
 Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full package of new stealth mechanics: noise, detection feedback, silent takedowns and a redesigned detection formula.
@@ -85,6 +85,7 @@ Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full
 | `icon_x` | 970 | Icon X position (0–1000) |
 | `icon_y` | 650 | Icon Y position (0–1000) |
 | `nvg_val` | 1.0 | Night-vision multiplier for NPCs that own NVGs (0 disables the NVG system, 0–3) |
+| `npc_flash` | OFF | NPCs that see another NPC's active flashlight from afar get a brief vision boost. Adds immersion; off by default due to potential FPS impact on dense maps |
 | `michiko_patch` | OFF | Alternative (harsher) night-time luminosity curve |
 | `debugx` | OFF | Debug printing for the target NPC under your crosshair |
 | `logging` | ON | Write the dedicated log file (`logs/stealth_overhaul.log`) |
@@ -132,7 +133,10 @@ gamedata/configs/
 ├── ui/ui_light_gem_21.xml        HUD statics (21:9)
 └── text/eng+rus+spa/ui_st_stealth.xml  Localized strings
 
-gamedata/particles/stealth_nvg/nvg_dot.pe  NVG eye dot particle
+gamedata/particles/stealth_nvg/
+├── nvg_dot_green.pe   NVG eye dot — allies (green)
+├── nvg_dot_yellow.pe  NVG eye dot — neutrals (yellow)
+└── nvg_dot_red.pe     NVG eye dot — enemies (red)
 gamedata/textures/ui/lightgem/eye.dds           Detection eye texture
 gamedata/textures/ui/lightgem/eye2.dds          NPC vision bar texture
 gamedata/textures/ui/lightgem/circle.dds        Noise/vision circle texture
@@ -164,6 +168,20 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
 - Outfit noise stats are read from the `noise_k` line in the outfit section (add it to any outfit to make it quieter/louder).
 
 ## Changelog
+
+### 2026-08-15 — v5.12: Code Quality & Bug Fixes
+
+Internal quality pass — no gameplay changes, no save compatibility breaks.
+
+- **Bug fix — `stealth_noise.script`:** `compute_radius()` was defined **twice** in the same file; Lua silently used the second (uncached) definition, leaving the optimised cached version (outfit / artifact slots) completely dead. Removed the duplicate. The active version now correctly caches the outfit multiplier and belt-artifact multipliers, avoiding an `iterate_inventory` call on every 250 ms update.
+- **Performance — `stealth_noise.script`:** `purge_stale()` was calling `level.object_by_id()` in a loop on every 250 ms tick. The engine-driven `on_net_destroy` callback already removes objects immediately; `purge_stale` is now throttled to run at most **once per second** as a safety fallback — reducing hot-path cost with no correctness impact.
+- **API — `stealth_noise.script`:** Added public `remove_from_registry(id)` function so other modules (`stealth_ui`) no longer reach into the `online_npcs` table directly.
+- **Cleanup — `stealth_ui.script`:** Now calls `stealth_noise.remove_from_registry()` instead of writing to `online_npcs` externally.
+- **Bug fix — `stealth_mcm.script`:** Four separator items all shared the same `id = "divider"` in the MCM tree. They are now uniquely named `divider_a / b / c / d`.
+- **New MCM option — `npc_flash`** (default OFF): NPCs that observe another NPC with an active flashlight get a brief vision boost. Previously this was hardcoded to `false` with a comment saying "change this if FPS tanks". It is now a proper MCM checkbox, exposed in all three localisations (EN / RU / ES). Default remains OFF to avoid FPS impact on dense maps.
+- **Cleanup — `stealth_takedown.script`:** Corpse-registry pruning replaced the unreliable `tg % 30000 < 200` check (which fired only if the update landed within a 200 ms window of the 30 s mark) with a proper `corpse_cleanup_timer` variable — cleanup now runs deterministically every 30 seconds.
+- **Cleanup — `stealth_nvg.script`:** Translated all Spanish-language code comments to English for consistency.
+- **Cleanup — `xr_danger.script`:** Removed three permanently-disabled `--[[ ... --]]` blocks (warning-shot behaviour and a smart-terrain alarm call that were commented out).
 
 ### 2026-08-14 — v5.11: Bug Fixes, Balance & New Features
 - **Crash Fix (`stealth_nvg.script`):** Fixed a fatal error (`FATAL ERROR... item not found, id`) that occurred when an NPC without a valid character profile spawned.

@@ -106,6 +106,13 @@
 	<string id="ui_mcm_stealth_nvg_val_desc">
 		<text>Vision nocturna de los NPC con NVG (stalkers de rango alto, marcados con un punto visible de noche). Cuanto mas alto, mejor te ven en la oscuridad. "0" desactiva el sistema NVG. \n \n Predeterminado: 1,0</text>
 	</string>
+
+	<string id="ui_mcm_stealth_npc_flash">
+		<text>Vision con linterna entre NPC</text>
+	</string>
+	<string id="ui_mcm_stealth_npc_flash_desc">
+		<text>Cuando esta activo, un NPC que ve a otro NPC con la linterna encendida desde lejos recibe un breve aumento de vision. Añade inmersion pero puede reducir los FPS en mapas con muchos NPC. Desactivado por defecto.</text>
+	</string>
 	<string id="ui_mcm_stealth_michiko_patch">
 		<text>Parche para el clima de Michiko</text>
 	</string>

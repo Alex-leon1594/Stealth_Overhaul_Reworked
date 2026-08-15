@@ -55,6 +55,7 @@ local current_surface_mult = 1  -- Active surface multiplier (updated on each fo
 
 local last_update = 0     -- Timestamp (ms) of the last noise update (throttling)
 local last_refresh = 0    -- Timestamp (ms) of the last full registry refresh
+local purge_timer = 0     -- Timestamp (ms) of the last purge_stale() run (throttled to 1 Hz)
 local handoff_logged = false  -- One-time log flag for the AlifeTactics handoff
 
 local function alive(obj)
@@ -109,10 +110,15 @@ local function refresh_registry()
 end
 
 local function purge_stale()
-	-- Quick prune of registry entries whose engine object no longer exists
+	-- Quick prune of registry entries whose engine object no longer exists.
+	-- Throttled to at most once per second: the event-driven on_net_destroy callback
+	-- already removes objects immediately; this scan is just a safety fallback.
+	local tg = time_global()
+	if tg - purge_timer < 1000 then return end  -- Run at most once per second
+	purge_timer = tg
 	for id in pairs(online_npcs) do
 		if not level.object_by_id(id) then
-			online_npcs[id] = nil       -- Object destroyed -> remove immediately
+			online_npcs[id] = nil       -- Object destroyed -> remove
 		end
 	end
 end
@@ -140,6 +146,12 @@ local function on_net_destroy(obj)
 	if ok then
 		online_npcs[id] = nil                            -- Drop it
 	end
+end
+
+function remove_from_registry(id)
+	-- Public API: remove a single NPC id from the online registry.
+	-- Called by stealth_ui and other modules instead of accessing online_npcs directly.
+	online_npcs[id] = nil
 end
 
 -- Visualize the current noise radius in the world (Modded Exes debug_render),
@@ -219,18 +231,8 @@ function alarm_nearby(obj, radius, dur)
 	end
 end
 
-local function get_artifact_mult()
-	-- Multiply the noise radius by the combined effect of carried belt artifacts
-	local m = 1                                       -- Neutral multiplier
-	if not (db.actor and db.actor.iterate_inventory) then return m end  -- No actor/inventory API -> neutral
-	db.actor:iterate_inventory(function(_, obj)        -- Loop over every inventory item
-		if obj then
-			local fx = artifact_effects[obj:section()]  -- Look up the artifact by its section name
-			if fx and fx.noise then m = m * fx.noise end  -- Chain-multiply its noise factor
-		end
-	end)
-	return m
-end
+-- (get_artifact_mult removed: artifact noise is now handled inside compute_radius()
+--  via a slot-based cache that avoids iterate_inventory on every update.)
 
 local function on_footstep(mat)
 	-- Called on each actor footstep with the material name underfoot:
@@ -333,42 +335,8 @@ local function compute_radius()
 	return r * mult
 end
 
-local function compute_radius()
-	-- Compute the full noise radius for the actor's current situation
-	local a = db.actor
-	if not (a and a:alive()) then return 0 end        -- No live actor -> zero noise
-
-	local r
-	if not IsMoveState('mcAnyMove') then r = 0         -- Standing still -> silent
-	elseif IsMoveState('mcSprint') then r = base_radius.sprint  -- Sprinting
-	elseif IsMoveState('mcCrouch') then r = base_radius.crouch  -- Crouched
-	elseif IsMoveState('mcAccel') then r = base_radius.walk     -- Walking fast (shift) -> walk level
-	else r = base_radius.run end                       -- Otherwise: running
-
-	r = r * stealth_mcm.get_config("noise_scale")      -- Apply the global MCM multiplier
-
-	local outfit = a:item_in_slot(7)                   -- Equipped outfit
-	if outfit and ini_sys:line_exist(outfit:section(), "noise_k") then  -- Outfit defines a custom noise factor
-		r = r * ini_sys:r_float(outfit:section(), "noise_k")  -- Apply it (e.g. padded suits are quieter)
-	end
-
-	local w = a:get_total_weight()                     -- Actor's total carried weight in kg
-	r = r * (1 + (w - 30) / 400)                       -- Heavier = louder (linearly from 30 kg baseline)
-
-	local breath = 1                                   -- Breathing/noise-of-body multiplier
-	if IsWounded(a) then breath = breath * 1.5 end     -- Wounded -> louder
-	if a.power and a.power < 0.3 then breath = breath * 1.3 end  -- Exhausted -> louder
-	if a.bleeding and a.bleeding > 0.05 then breath = breath * (1 + a.bleeding) end  -- Bleeding -> much louder
-	r = r * breath                                     -- Apply the breathing multiplier
-
-	r = r * (1 - level.rain_factor() * 0.5)            -- Rain masks footsteps (up to half)
-
-	r = r * get_artifact_mult()                        -- Apply artifact effects
-
-	r = r * current_surface_mult                       -- Surface material underfoot (metal echoes, earth muffles)
-
-	return r
-end
+-- NOTE: the second (uncached) compute_radius() that was here has been removed.
+-- The cached version above (with slot-based outfit/artifact caching) is the active one.
 
 local function at_noise_handoff()
 	-- AlifeTactics compatibility: when AT is installed and its movement-noise

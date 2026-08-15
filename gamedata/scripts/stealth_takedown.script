@@ -5,6 +5,7 @@ corpses = {}
 local hide_timer = {}
 local last_update = 0
 local takedown_cd = 0
+local corpse_cleanup_timer = 0  -- Timestamp (ms) of the last corpse-registry cleanup
 
 local function alive(obj)
 	if not obj or (type(obj) ~= "userdata" and type(obj) ~= "table") then return false end
@@ -131,7 +132,8 @@ function stealth_takedown_update()
 
 	if not stealth_mcm.get_config("hide_corpse") then return end
 
-	if tg % 30000 < 200 then
+	if tg - corpse_cleanup_timer > 30000 then          -- Prune the corpse registry once every 30 s
+		corpse_cleanup_timer = tg
 		for id, c in pairs(corpses) do
 			if not (stealth_noise.online_npcs[id]) then corpses[id] = nil end
 		end

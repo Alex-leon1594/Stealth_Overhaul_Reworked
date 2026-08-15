@@ -327,13 +327,7 @@ local function eval_danger(self)
 		return false
 	end
 
-	--[[
-	local sim = alife()
-	local se_obj = sim:object(id)
-	if (se_obj and se_obj.m_smart_terrain_id ~= 65535) then
-		sim:object(se_obj.m_smart_terrain_id):set_alarm()
-	end
-	--]]
+
 
 	self.a.danger_time = danger_time
 	self.a.inertion = inertion
@@ -377,32 +371,7 @@ local function script_action_danger_scripted(npc,st)
 
 	local who_dist = bdo and bdo:position():distance_to_sqr(bdo_pos)
 
-	--[[
-	if (dist and dist >= 70) then
-		if (bdo and npc:relation(bdo) > 0 and npc:see(bdo)) then
-			state_mgr.set_state(npc,"hide_na",nil,nil,{look_object = bdo})
-			if (not utils_obj.squad_in_los(npc,bdo)) then
-				local wpn = npc:best_weapon()
-				if (wpn) then
-					local relation = npc:relation(bdo)
-					local look_pos = vector():set(bdo:position())
 
-					look_pos.y = relation >= 2 and look_pos.y + 1 or look_pos.y - (math_random(25,35)/100)
-					npc:set_sight(look.fire_point,look_pos)
-
-					if (npc:target_body_state() == move.crouch) then
-						st.__warning_shot_tmr = not st.__warning_shot_tmr and tg+500 or st.__warning_shot_tmr
-						if (tg < st.__warning_shot_tmr) then
-							npc:set_item(object.fire1,wpn,1,1)
-							xr_sound.set_sound_play(npc:id(),"tolls")
-						end
-					end
-				end
-			end
-			st.lvid = utils_obj.send_to_nearest_accessible_vertex(npc,npc:level_vertex_id())
-		end
-	end
-	--]]
 
 	if (st.stage == 1) then
 		local new_vid = random_choice(utils_obj.try_to_strafe(npc),utils_obj.try_go_backward(npc,6),utils_obj.try_go_cover(npc,bdo and bdo:position() or bdo_pos or npc:position()))
@@ -470,33 +439,6 @@ local function script_action_danger_grenade(npc,st,bd,best_danger_object,depende
 	local tg = time_global()
 
 	if (dist and dist >= 150) then
-		--[[
-		if (be and npc:see(be)) then
-			state_mgr.set_state(npc,"hide_na",nil,nil,{look_object = be})
-			if (not utils_obj.squad_in_los(npc,be)) then
-				local wpn = npc:best_weapon()
-				if (wpn) then
-					local relation = npc:relation(be)
-					local look_pos = vector():set(be:position())
-
-					look_pos.y = relation >= 2 and look_pos.y + 1 or look_pos.y - (math_random(25,35)/100)
-					npc:set_sight(look.fire_point,look_pos)
-
-					if (npc:target_body_state() == move.crouch) then
-						st.__warning_shot_tmr = not st.__warning_shot_tmr and tg+500 or st.__warning_shot_tmr
-						if (tg < st.__warning_shot_tmr) then
-							npc:set_item(object.fire1,wpn,1,1)
-							xr_sound.set_sound_play(npc:id(),"tolls")
-						end
-					end
-					
-					npc:set_body_state(move.crouch)
-				end
-			end
-		else
-			state_mgr.set_state(npc,"threat_danger",nil,nil,{look_position = bdo_pos})
-		end
-		--]]
 		local sm = db.storage[npc:id()].state_mgr
 		if (sm and sm.target_state ~= "threat_danger") then
 			npc:clear_animations()
