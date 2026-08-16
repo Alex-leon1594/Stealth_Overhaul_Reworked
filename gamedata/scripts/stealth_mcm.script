@@ -64,7 +64,7 @@ function on_mcm_load()
 			{id = "low_crouch", type = "track", val = 2, min=0.05,max=1,step=0.05, def = 0.25},  -- Slider: crouch + slow movement
 			{id = "icon", type = "check", val = 1, def = true},                                  -- Checkbox: show HUD icon
 			{id = "icon_type", type = "list", val = 2, def = 1, content = {{1, "Light indicator"}, {2, "NPC vision"}}, no_str = true},  -- List: icon mode
-			{id = "icon_x", type = "input", val = 2, min = 0, max = 1000, def = 970},           -- Number input: icon X
+			{id = "icon_x", type = "input", val = 2, min = 0, max = 1000, def = 840},           -- Number input: icon X
 			{id = "icon_y", type = "input", val = 2, min = 0, max = 1000, def = 650},           -- Number input: icon Y
 			{id = "nvg_val", type = "track", val = 2, min=0,max=3,step=0.05, def = 1},          -- Slider: NPC NVG strength
 			{id = "npc_flash", type = "check", val = 1, def = false},                           -- Checkbox: NPC cross-flashlight vision boost
@@ -76,7 +76,7 @@ function on_mcm_load()
 			{id= "divider_c", type = "line" },
 			{id = "noise", type = "check", val = 1, def = true},                                -- Checkbox: noise system
 			{id = "noise_bar", type = "check", val = 1, def = true},                            -- Checkbox: noise HUD bar
-			{id = "noise_bar_key", type = "key_bind", val = 2, def = DIK_keys.DIK_F7, text = "ui_mcm_stealth_noise_bar_key"},  -- Hotkey: toggle the noise bar in-game
+			{id = "noise_bar_key", type = "key_bind", val = 2, def = DIK_keys.DIK_F8, text = "ui_mcm_stealth_noise_bar_key"},  -- Hotkey: toggle the noise bar in-game
 			{id = "noise_scale", type = "track", val = 2, min=0.5,max=3,step=0.1, def = 1},     -- Slider: noise radius multiplier
 			{id = "noise_handoff", type = "check", val = 1, def = true},                        -- Checkbox: AlifeTactics handoff
 			{id = "noise_hostile_only", type = "check", val = 1, def = true},                    -- Checkbox: only hostile factions react to footsteps
