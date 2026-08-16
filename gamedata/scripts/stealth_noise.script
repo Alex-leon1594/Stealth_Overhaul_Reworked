@@ -309,15 +309,15 @@ local function compute_radius()
     local current_belt_ids = {}
     local index = 1
     
-    -- 1. Recolectar los IDs actuales en el cinturón
+    -- 1. Collect the current IDs on the belt
     a:iterate_belt(function(item)
         current_belt_ids[index] = obj_id(item)
         index = index + 1
     end)
 
-    -- 2. Verificar si el cinturón ha cambiado (diferente tamaño o diferentes IDs)
+    -- 2. Check if the belt has changed (different size or different IDs)
     local belt_changed = false
-    -- Asegúrate de que cached_noise.belt_ids esté inicializado como tabla al inicio del script
+    -- Ensure cached_noise.belt_ids is initialized as a table at the start of the script
     local cached_belt = cached_noise.belt_ids or {} 
     
     if #current_belt_ids ~= #cached_belt then
@@ -331,7 +331,7 @@ local function compute_radius()
         end
     end
 
-    -- 3. Si hubo cambios, actualizamos el caché y el multiplicador
+    -- 3. If there were changes, update the cache and the multiplier
     if belt_changed then
         local new_art_mult = 1.0
         cached_noise.belt_ids = current_belt_ids
