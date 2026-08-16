@@ -13,7 +13,7 @@ local defaults = {          -- Fallback values used when MCM is not installed
 	["low_crouch"] = 0.25,  -- Detection multiplier while crouched + moving slowly
 	["icon"] = true,        -- Show the HUD icon (eye / gem / noise bar)
 	["icon_type"] = 1,      -- HUD icon mode: 1 = light gem, 2 = NPC vision bar
-	["icon_x"] = 970,       -- HUD icon X position (0-1000)
+	["icon_x"] = 840,       -- HUD icon X position (0-1000)
 	["icon_y"] = 650,       -- HUD icon Y position (0-1000)
 	["michiko_patch"] = false,  -- Alternative (harsher) night luminosity curve
 	["debugx"] = false,     -- Debug printing for the targeted NPC
