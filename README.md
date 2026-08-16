@@ -91,7 +91,7 @@ Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full
 | `logging` | ON | Write the dedicated log file (`logs/stealth_overhaul.log`) |
 | `noise` | ON | Enable the footstep noise system |
 | `noise_bar` | ON | Show the blue noise-level bar under the HUD icon (hide it without disabling the noise system) |
-| `noise_bar_key` | F7 | Hotkey to toggle the noise bar in-game (0 = unbound, set in MCM) |
+| `noise_bar_key` | F8 | Hotkey to toggle the noise bar in-game (0 = unbound, set in MCM) |
 | `noise_scale` | 1.0 | Global noise radius multiplier (0.5–3) |
 | `noise_handoff` | ON | Delegate hostile footstep alerts to AlifeTactics when installed (no double alerting) |
 | `noise_hostile_only` | ON | Only NPCs whose faction is hostile to you react to your footsteps (neutrals/friends ignore them — no more alert spam when walking near neutrals) |
