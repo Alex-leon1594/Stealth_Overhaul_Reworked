@@ -31,7 +31,7 @@ Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full
   - NPCs/monsters standing within 7 m of a burning campfire get +0.4 luminosity — targets near fires are easier to spot (no longer a static constant).
 - **Detection feedback HUD** (`stealth_ui.script`)
   - Eye meter: white (undetected) → amber (suspicion / alarm) → red (spotted).
-  - Noise bar to the right of the eye icon shows your current noise radius as a vertical meter (green = quiet → yellow → red = very loud). Can be hidden independently via MCM `noise_bar` while keeping the noise system active — or toggled in-game with a hotkey (MCM `noise_bar_key`, default F7).
+  - Noise bar to the right of the eye icon shows your current noise radius as a vertical meter (green = quiet → yellow → red = very loud). Can be hidden independently via MCM `noise_bar` while keeping the noise system active — or toggled in-game with a hotkey (MCM `noise_bar_key`, default F8).
   - Eyesight is not persistent: your detection accumulates, then calms down along a smooth exponential curve (fast drop right after losing sight, gentle tail) — roughly halved every 2.5 s.
   - Companions are excluded from the meter: any NPC traveling in your squad (escorts/companions) never turns the eye red or amber, even when their goodwill is not FRIENDS.
 - **Dual HUD icon** (`light_gem.script`, ported from *Stealth 2.31*)
@@ -82,7 +82,7 @@ Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full
 | `low_crouch` | 0.25 | Detection multiplier while crouched + slow movement |
 | `icon` | ON | Show the detection eye / noise bar HUD |
 | `icon_type` | 1 | HUD icon mode: 1 = light indicator (gem), 2 = NPC vision (progress bar) |
-| `icon_x` | 970 | Icon X position (0–1000) |
+| `icon_x` | 840 | Icon X position (0–1000) |
 | `icon_y` | 650 | Icon Y position (0–1000) |
 | `nvg_val` | 1.0 | Night-vision multiplier for NPCs that own NVGs (0 disables the NVG system, 0–3) |
 | `npc_flash` | OFF | NPCs that see another NPC's active flashlight from afar get a brief vision boost. Adds immersion; off by default due to potential FPS impact on dense maps |
