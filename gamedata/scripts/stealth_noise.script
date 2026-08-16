@@ -257,88 +257,101 @@ local function on_footstep(mat)
 end
 
 local function compute_radius()
-	local a = db.actor
-	if not (a and a:alive()) then return 0 end
+    local a = db.actor
+    if not (a and a:alive()) then return 0 end
 
-	local r
-	-- Base radius from movement (keeping original logic)
-	if not IsMoveState('mcAnyMove') then r = 0
-	elseif IsMoveState('mcSprint') then r = base_radius.sprint
-	elseif IsMoveState('mcCrouch') then r = base_radius.crouch
-	elseif IsMoveState('mcAccel') then r = base_radius.walk
-	else r = base_radius.run end
+    local r
+    -- Base radius from movement
+    if not IsMoveState('mcAnyMove') then r = 0
+    elseif IsMoveState('mcSprint') then r = base_radius.sprint
+    elseif IsMoveState('mcCrouch') then r = base_radius.crouch
+    elseif IsMoveState('mcAccel') then r = base_radius.walk
+    else r = base_radius.run end
 
-	if r == 0 then
-		return 0
-	end
+    if r == 0 then return 0 end
 
-	-- Apply the global MCM multiplier first, as in the original
-	r = r * stealth_mcm.get_config("noise_scale")
+    r = r * stealth_mcm.get_config("noise_scale")
 
-	-- Weight (applied to r, as in original)
-	local weight = a:get_total_weight()
-	r = r * (1 + (weight - 30) / 400)
+    local weight = a:get_total_weight()
+    r = r * (1 + (weight - 30) / 400)
 
-	-- Other multipliers (accumulated in 'mult')
-	local mult = 1.0
+    local mult = 1.0
 
-	-- Outfit (cached via ID to avoid __eq crash on game_object)
-	local current_outfit = a:item_in_slot(7)
-	local current_outfit_id = obj_id(current_outfit)
-	if current_outfit_id ~= cached_noise.outfit_id then
-		cached_noise.outfit_id = current_outfit_id
-		if current_outfit then
-			local outfit_sect = current_outfit:section()
-			if ini_sys:line_exist(outfit_sect, "noise_k") then
-				cached_noise.outfit_mult = ini_sys:r_float(outfit_sect, "noise_k")
-			else
-				cached_noise.outfit_mult = 1.0
-			end
-		else
-			cached_noise.outfit_mult = 1.0
-		end
-	end
-	mult = mult * cached_noise.outfit_mult
+    -- Outfit
+    local current_outfit = a:item_in_slot(7)
+    local current_outfit_id = obj_id(current_outfit)
+    if current_outfit_id ~= cached_noise.outfit_id then
+        cached_noise.outfit_id = current_outfit_id
+        if current_outfit then
+            local outfit_sect = current_outfit:section()
+            if ini_sys:line_exist(outfit_sect, "noise_k") then
+                cached_noise.outfit_mult = ini_sys:r_float(outfit_sect, "noise_k")
+            else
+                cached_noise.outfit_mult = 1.0
+            end
+        else
+            cached_noise.outfit_mult = 1.0
+        end
+    end
+    mult = mult * cached_noise.outfit_mult
 
-	-- Breathing (calculated always, changes frequently)
-	local breath_mult = 1.0
-	if IsWounded(a) then breath_mult = breath_mult * 1.5 end
-	if a.power and a.power < 0.3 then breath_mult = breath_mult * 1.3 end
-	if a.bleeding and a.bleeding > 0.05 then breath_mult = breath_mult * (1 + a.bleeding) end
-	mult = mult * breath_mult
+    -- Breathing
+    local breath_mult = 1.0
+    if IsWounded(a) then breath_mult = breath_mult * 1.5 end
+    if a.power and a.power < 0.3 then breath_mult = breath_mult * 1.3 end
+    if a.bleeding and a.bleeding > 0.05 then breath_mult = breath_mult * (1 + a.bleeding) end
+    mult = mult * breath_mult
 
-	-- Rain (calculated always)
-	mult = mult * (1 - level.rain_factor() * 0.5)
+    -- Rain
+    mult = mult * (1 - level.rain_factor() * 0.5)
 
-	-- Artifacts (cached via IDs to avoid __eq crash on game_object)
-	local belt_changed = false
-	for i=8,19 do
-		if obj_id(a:item_in_slot(i)) ~= cached_noise.belt_ids[i] then
-			belt_changed = true
-			break
-		end
-	end
+    -- Artifacts (Fixed for Anomaly: using iterate_belt instead of invalid slots)
+    local current_belt_ids = {}
+    local index = 1
+    
+    -- 1. Recolectar los IDs actuales en el cinturón
+    a:iterate_belt(function(item)
+        current_belt_ids[index] = obj_id(item)
+        index = index + 1
+    end)
 
-	if belt_changed then
-		local new_art_mult = 1.0
-		for i=8,19 do
-			local item = a:item_in_slot(i)
-			cached_noise.belt_ids[i] = obj_id(item)  -- Store ID, not the object
-			if item then
-				local fx = artifact_effects[item:section()]
-				if fx and fx.noise then
-					new_art_mult = new_art_mult * fx.noise
-				end
-			end
-		end
-		cached_noise.art_mult = new_art_mult
-	end
-	mult = mult * cached_noise.art_mult
+    -- 2. Verificar si el cinturón ha cambiado (diferente tamaño o diferentes IDs)
+    local belt_changed = false
+    -- Asegúrate de que cached_noise.belt_ids esté inicializado como tabla al inicio del script
+    local cached_belt = cached_noise.belt_ids or {} 
+    
+    if #current_belt_ids ~= #cached_belt then
+        belt_changed = true
+    else
+        for i = 1, #current_belt_ids do
+            if current_belt_ids[i] ~= cached_belt[i] then
+                belt_changed = true
+                break
+            end
+        end
+    end
 
-	-- Surface material underfoot (metal echoes, earth muffles)
-	mult = mult * current_surface_mult
+    -- 3. Si hubo cambios, actualizamos el caché y el multiplicador
+    if belt_changed then
+        local new_art_mult = 1.0
+        cached_noise.belt_ids = current_belt_ids
+        
+        a:iterate_belt(function(item)
+            local sect = item:section()
+            local fx = artifact_effects[sect]
+            if fx and fx.noise then
+                new_art_mult = new_art_mult * fx.noise
+            end
+        end)
+        
+        cached_noise.art_mult = new_art_mult
+    end
+    mult = mult * (cached_noise.art_mult or 1.0)
 
-	return r * mult
+    -- Surface material underfoot
+    mult = mult * (current_surface_mult or 1.0)
+
+    return r * mult
 end
 
 -- NOTE: the second (uncached) compute_radius() that was here has been removed.
