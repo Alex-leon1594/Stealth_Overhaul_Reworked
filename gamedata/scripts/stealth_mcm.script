@@ -22,7 +22,7 @@ local defaults = {          -- Fallback values used when MCM is not installed
 	["npc_flash"] = false,  -- Cross-NPC flashlight vision boost (may impact FPS on dense maps)
 	["noise"] = true,       -- Enable the footstep noise system
 	["noise_bar"] = true,   -- Show the HUD noise bar under the icon
-	["noise_bar_key"] = DIK_keys.DIK_F7,  -- Hotkey to toggle the noise bar in-game (0 = unbound)
+	["noise_bar_key"] = DIK_keys.DIK_F8,  -- Hotkey to toggle the noise bar in-game (0 = unbound)
 	["noise_scale"] = 1,    -- Global noise radius multiplier
 	["noise_handoff"] = true,  -- Delegate hostile footstep alerts to AlifeTactics (auto-detect)
 	["noise_hostile_only"] = true,  -- Only factions hostile to the actor react to footsteps (neutrals/friends ignore them)
