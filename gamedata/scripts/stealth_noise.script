@@ -15,11 +15,8 @@ local cached_noise = {
     outfit_id   = nil,   -- ID of the equipped outfit (number), or nil
     outfit_mult = 1.0,
     art_mult    = 1.0,
-    belt_ids    = {}     -- Slot ID -> item ID (number) or nil
+    belt_ids    = {}     -- Array of active belt item IDs (numbers)
 }
-for i=8,19 do
-    cached_noise.belt_ids[i] = nil
-end
 
 -- Safe helper: returns the object's numeric ID, or nil if the object is absent.
 local function obj_id(obj)
@@ -305,14 +302,16 @@ local function compute_radius()
     -- Rain
     mult = mult * (1 - level.rain_factor() * 0.5)
 
-    -- Artifacts (Fixed for Anomaly: using iterate_belt instead of invalid slots)
+    -- Artifacts (Fixed for Anomaly: using iterate_belt with (owner, item))
     local current_belt_ids = {}
     local index = 1
     
     -- 1. Collect the current IDs on the belt
-    a:iterate_belt(function(item)
-        current_belt_ids[index] = obj_id(item)
-        index = index + 1
+    a:iterate_belt(function(owner, item)
+        if item then
+            current_belt_ids[index] = obj_id(item)
+            index = index + 1
+        end
     end)
 
     -- 2. Check if the belt has changed (different size or different IDs)
@@ -336,11 +335,13 @@ local function compute_radius()
         local new_art_mult = 1.0
         cached_noise.belt_ids = current_belt_ids
         
-        a:iterate_belt(function(item)
-            local sect = item:section()
-            local fx = artifact_effects[sect]
-            if fx and fx.noise then
-                new_art_mult = new_art_mult * fx.noise
+        a:iterate_belt(function(owner, item)
+            if item then
+                local sect = item:section()
+                local fx = artifact_effects[sect]
+                if fx and fx.noise then
+                    new_art_mult = new_art_mult * fx.noise
+                end
             end
         end)
         
