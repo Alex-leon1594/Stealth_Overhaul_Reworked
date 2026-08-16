@@ -90,8 +90,14 @@
 	<string id="ui_mcm_stealth_icon_x">
 		<text>Icon Placement X</text>
 	</string>
+	<string id="ui_mcm_stealth_icon_x_desc">
+		<text>Horizontal position of the stealth HUD icon on screen (0 to 1000). \n \n Default: 970</text>
+	</string>
 	<string id="ui_mcm_stealth_icon_y">
 		<text>Icon Placement Y</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_y_desc">
+		<text>Vertical position of the stealth HUD icon on screen (0 to 1000). \n \n Default: 650</text>
 	</string>
 
 	<string id="ui_mcm_stealth_nvg_val">

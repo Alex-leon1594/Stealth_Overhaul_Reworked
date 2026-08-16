@@ -96,8 +96,14 @@
 	<string id="ui_mcm_stealth_icon_x">
 		<text>Posicion del icono X</text>
 	</string>
+	<string id="ui_mcm_stealth_icon_x_desc">
+		<text>Posicion horizontal del icono de sigilo en pantalla (0 a 1000). \n \n Predeterminado: 970</text>
+	</string>
 	<string id="ui_mcm_stealth_icon_y">
 		<text>Posicion del icono Y</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_y_desc">
+		<text>Posicion vertical del icono de sigilo en pantalla (0 a 1000). \n \n Predeterminado: 650</text>
 	</string>
 
 	<string id="ui_mcm_stealth_nvg_val">

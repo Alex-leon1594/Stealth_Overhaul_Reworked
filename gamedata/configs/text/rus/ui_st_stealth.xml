@@ -88,8 +88,14 @@
 	<string id="ui_mcm_stealth_icon_x">
 		<text>Положение иконки (X)</text>
 	</string>
+	<string id="ui_mcm_stealth_icon_x_desc">
+		<text>Положение иконки интерфейса по горизонтали (0 - 1000). \n \n По умолчанию: 970</text>
+	</string>
 	<string id="ui_mcm_stealth_icon_y">
 		<text>Положение иконки (Y)</text>
+	</string>
+	<string id="ui_mcm_stealth_icon_y_desc">
+		<text>Положение иконки интерфейса по вертикали (0 - 1000). \n \n По умолчанию: 650</text>
 	</string>
 
 	<string id="ui_mcm_stealth_nvg_val">

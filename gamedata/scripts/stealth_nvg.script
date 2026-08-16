@@ -188,19 +188,40 @@ function actor_on_first_update()
 end
 
 function npc_on_death_callback(npc)
-	-- remove keys if npc died
-	if stealth_nvg_ps[npc:id()] then
-		stealth_nvg_ps[npc:id()] = nil
+	if not npc then return end
+	local id = npc:id()
+	if stealth_nvg_ps[id] then
+		stealth_nvg_ps[id] = nil
 	end
 
-	if particles_t[npc:id()] then
-		local particle_info = particles_t[npc:id()]
+	if particles_t[id] then
+		local particle_info = particles_t[id]
 		if particle_info.obj and particle_info.obj:playing() then
 			particle_info.obj:stop()
 		end
-		particles_t[npc:id()] = nil
+		particles_t[id] = nil
 	end
+end
 
+local function on_net_destroy(obj)
+	if not obj then return end
+	local id = obj:id()
+	if particles_t[id] then
+		local particle_info = particles_t[id]
+		if particle_info and particle_info.obj and particle_info.obj:playing() then
+			particle_info.obj:stop()
+		end
+		particles_t[id] = nil
+	end
+end
+
+local function cleanup_all_particles()
+	for id, particle_info in pairs(particles_t) do
+		if particle_info and particle_info.obj and particle_info.obj:playing() then
+			particle_info.obj:stop()
+		end
+	end
+	particles_t = {}
 end
 
 function save_state(m_data)
@@ -221,6 +242,12 @@ function on_game_start()
 	RegisterScriptCallback("npc_on_net_spawn", npc_on_net_spawn)
 	RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
 	RegisterScriptCallback("npc_on_death_callback", npc_on_death_callback)
+	RegisterScriptCallback("game_object_on_net_destroy", on_net_destroy)
+	RegisterScriptCallback("actor_on_net_destroy", cleanup_all_particles)
 	RegisterScriptCallback("save_state", save_state)
 	RegisterScriptCallback("load_state", load_state)
+end
+
+function on_game_end()
+	cleanup_all_particles()
 end

@@ -47,6 +47,7 @@ If you know the original **Stealth 2.0.1**, this is everything it did — rework
 - Fixed stock bugs (NPCs alerting when you stand still, takedown crash, `xr_combat_ignore` condition, item-drop crash).
 - Performance: the HUD's line-of-sight checks run at half the rate (still smooth) for a cheaper per-frame cost.
 - **Script optimization**: redundant `camp_lum.script` removed (campfire lighting is handled by `visual_memory_manager.script`); the log folder path is cached after the first write; `light_gem`/`stealth_ui` cache all MCM settings (read once at start, refreshed on MCM change — not every frame); the hot `get_visible_value` detection path uses the cached values.
+- **Code quality & DLTX (v5.13)**: 100% modular DLTX architecture (`mod_*.ltx`) with zero MO2 file conflicts; `level.iterate_nearest` optimized corpse search; periodic 15 s memory purge in `visual_memory_manager` and 30 s released corpse cleanup in `stealth_takedown` (prevents save/RAM bloat); particle lifecycle handlers in `stealth_nvg` (no orphaned eye particles on level change); complete trilingual MCM localization (34 options).
 - **Code quality (v5.12)**: fixed a `compute_radius()` duplicate in `stealth_noise` (the cached version with outfit/artifact caching was dead code — now fixed); `purge_stale()` throttled to 1 Hz; corpse-cleanup timer made deterministic; three dead `--[[...--]]` blocks removed from `xr_danger`.
 - Full Russian retranslation + cleaned Spanish strings, documented balance tips.
 
@@ -101,7 +102,7 @@ Si conoces el **Stealth 2.0.1** original, esto es todo lo que hacía — visión
 - **Optimización de scripts**: se eliminó el redundante `camp_lum.script` (la iluminación de hogueras la gestiona `visual_memory_manager.script`); la ruta de la carpeta de log se cachea tras la primera escritura; `light_gem`/`stealth_ui` cachean todos los ajustes MCM (se leen una vez al inicio y se refrescan al cambiar en MCM — no cada frame); la ruta crítica `get_visible_value` de detección usa valores cacheados.
 - Retraducción completa al ruso + cadenas en español limpiadas, consejos de balance documentados.
 
-**Cada mecánica se activa/desactiva desde MCM — una sección, 33 opciones.**
+**Cada mecánica se activa/desactiva desde MCM — una sección, 34 opciones.**
 
 ---
 
@@ -149,7 +150,8 @@ Si conoces el **Stealth 2.0.1** original, esto es todo lo que hacía — visión
 - Улучшение системы опасностей: опасности, вызванные игроком, живут дольше и никогда не игнорируются по дистанции; спрятанные трупы не создают события опасности.
 - Исправлены баги стоковой версии (тревога NPC при простое, вылет такедауна, условие `xr_combat_ignore`, вылет при броске предмета).
 - Производительность: проверки прямой видимости HUD выполняются вдвое реже (по-прежнему плавно) — меньше затрат на кадр.
-- **Оптимизация скриптов**: удалён избыточный `camp_lum.script` (освещение от костров обрабатывает `visual_memory_manager.script`); путь к папке лога кэшируется после первой записи; `light_gem`/`stealth_ui` кэшируют все настройки MCM (читаются один раз при старте и обновляются при изменении в MCM — не каждый кадр); горячий путь `get_visible_value` использует кэшированные значения.
+- **Качество кода и DLTX (v5.13)**: 100% модульная архитектура DLTX (`mod_*.ltx`) без конфликтов файлов в MO2; оптимизированный поиск трупов через `level.iterate_nearest`; периодическая очистка памяти (15 с) в `visual_memory_manager` и удаление освобождённых трупов (30 с) в `stealth_takedown` (предотвращает разрастание сейвов и памяти); полный контроль жизненного цикла частиц в `stealth_nvg` при смене локации; полная трехъязычная локализация MCM (34 опции).
+- **Оптимизация скриптов (v5.10-v5.12)**: исправлен дубликат `compute_radius()` в `stealth_noise`; удалён избыточный `camp_lum.script`; кэширование путей и настроек MCM; оптимизация производительности.
 - Полный пересмотр русской локализации + очистка испанских строк, документированные советы по балансу.
 
-**Каждая механика включается/выключается в MCM — одна секция, 33 опции.**
+**Каждая механика включается/выключается в MCM — одна секция, 34 опции.**

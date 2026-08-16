@@ -148,33 +148,40 @@ function stealth_takedown_update()
 	local fwd = db.actor:direction()
 	local handled = {}
 
-	for id, npc in pairs(stealth_noise.online_npcs) do
-		if type(npc) ~= "userdata" then
-			npc = level and level.object_by_id(id)
-		end
-		if npc and not alive(npc) and IsStalker(npc) then
-			local c = corpses[id]
-			if not (c and c.hidden) then
-				local pos = npc:position()
-				if pos:distance_to_sqr(ap) <= 4 then
-					local dir = vector():set(pos):sub(ap)
-					local ml = dir:magnitude()
-					if ml > 0.01 and fwd:dotproduct(dir:mul(1 / ml)) > 0.75 then
-						handled[id] = true
-						hide_timer[id] = (hide_timer[id] or 0) + 0.2
-						if hide_timer[id] >= 1.5 then
-							c = c or {}
-							c.hidden = true
-							c.t = tg
-							corpses[id] = c
-							hide_timer[id] = nil
-							pcall(function() npc:set_corpse_ready(false) end)
-							pcall(function() npc:set_visible(false) end)
-							news_manager.send_tip(db.actor, "Corpse hidden", 0, nil, 1500)
-							stealth_log.log("Corpse hidden: NPC " .. id)  -- Log the hidden corpse
-						end
+	local function process_corpse(npc)
+		if not (npc and not alive(npc) and IsStalker(npc)) then return end
+		local id = npc:id()
+		local c = corpses[id]
+		if not (c and c.hidden) then
+			local pos = npc:position()
+			if pos:distance_to_sqr(ap) <= 4.0 then
+				local dir = vector():set(pos):sub(ap)
+				local ml = dir:magnitude()
+				if ml > 0.01 and fwd:dotproduct(dir:mul(1 / ml)) > 0.75 then
+					handled[id] = true
+					hide_timer[id] = (hide_timer[id] or 0) + 0.2
+					if hide_timer[id] >= 1.5 then
+						c = c or {}
+						c.hidden = true
+						c.t = tg
+						corpses[id] = c
+						hide_timer[id] = nil
+						pcall(function() npc:set_corpse_ready(false) end)
+						pcall(function() npc:set_visible(false) end)
+						news_manager.send_tip(db.actor, "Corpse hidden", 0, nil, 1500)
+						stealth_log.log("Corpse hidden: NPC " .. id)  -- Log the hidden corpse
 					end
 				end
+			end
+		end
+	end
+
+	if level and level.iterate_nearest then
+		level.iterate_nearest(ap, 3.0, process_corpse)
+	else
+		for id, st in pairs(db.storage) do
+			if id ~= AC_ID and st and st.object then
+				process_corpse(st.object)
 			end
 		end
 	end

@@ -1,4 +1,4 @@
-# Stealth_Overhaul_Reworked_v5.12
+# Stealth_Overhaul_Reworked_v5.13
 
 Complete stealth overhaul for **STALKER Anomaly** (GAMMA-compatible).
 Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full package of new stealth mechanics: noise, detection feedback, silent takedowns and a redesigned detection formula.
@@ -125,9 +125,9 @@ gamedata/scripts/
 └── stealth_mcm.script            MCM options
 
 gamedata/configs/
-├── ai_tweaks/xr_danger.ltx       Danger inertion/ignore values (actor sections added)
-├── creatures/m_stalker.ltx       Footstep/vision tuning for stalkers
-├── creatures/m_stalker_zombied.ltx  Zombied vision tuning (vision_free / vision_danger)
+├── ai_tweaks/mod_xr_danger_stealth.ltx          DLTX patch for danger inertion/ignore values
+├── creatures/mod_m_stalker_stealth.ltx          DLTX patch for stalker vision parameters
+├── creatures/mod_m_stalker_zombied_stealth.ltx  DLTX patch for zombied vision parameters
 ├── ui/ui_light_gem.xml           HUD statics (gem, gem_bar, det_eye, noise_bar)
 ├── ui/ui_light_gem_16.xml        HUD statics (16:9)
 ├── ui/ui_light_gem_21.xml        HUD statics (21:9)
@@ -168,6 +168,15 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
 - Outfit noise stats are read from the `noise_k` line in the outfit section (add it to any outfit to make it quieter/louder).
 
 ## Changelog
+
+### 2026-08-15 — v5.13: DLTX Architecture, Memory Leak Prevention & Lifecycle Hardening
+
+- **Full DLTX Modernization (`mod_*.ltx`):** Converted monolithic file replacements (`m_stalker.ltx`, `m_stalker_zombied.ltx`, `xr_danger.ltx`) into modular DLTX patches (`mod_m_stalker_stealth.ltx`, `mod_m_stalker_zombied_stealth.ltx`, `mod_xr_danger_stealth.ltx`). This ensures 100% plug-and-play compatibility with any other AI, creature or HD model mod, producing **zero file conflicts** in Mod Organizer 2.
+- **Memory Leak & Stale Data Prevention (`visual_memory_manager.script`):** Added a dedicated `purge_stale_memory` routine (running every 15 s) that cleans up tracking tables (`marked`, `alarm_boost`, `muzzle_t`, `vis_acc`, `vis_decay`, `vis_last`) for NPCs that are dead or have despawned, preventing memory bloat in long playthroughs.
+- **Corpse Hiding & Performance (`stealth_takedown.script`):** Switched corpse detection to the engine-native C++ spatial iterator `level.iterate_nearest` within a 3.0 m radius (with fallback to `db.storage`), greatly boosting search efficiency and eliminating missed dead bodies. Added periodic 30 s pruning of released corpse IDs so `m_data.stealth_corpses` never accumulates orphaned data in save files.
+- **Particle Lifecycle Hardening (`stealth_nvg.script`):** Added `game_object_on_net_destroy`, `actor_on_net_destroy`, and `on_game_end` handlers to guarantee that all eye-dot particles in `particles_t` are explicitly stopped and cleared from memory when NPCs despawn, switch levels, or exit the game.
+- **HUD Lifecycle Cleanup (`light_gem.script`):** Added explicit `deactivate_hud()` invocation in `on_game_end` to guarantee clean UI detachment on game exit.
+- **Localization Completeness (`ui_st_stealth.xml`):** Added missing descriptions for `ui_mcm_stealth_icon_x_desc` and `ui_mcm_stealth_icon_y_desc` across all three languages (English, Spanish, and native CP1251 Russian).
 
 ### 2026-08-15 — v5.12: Code Quality & Bug Fixes
 

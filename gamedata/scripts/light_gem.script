@@ -103,6 +103,7 @@ function on_game_start()
 end
 
 function on_game_end()
+	deactivate_hud()
 	UnregisterScriptCallback("on_key_press", on_key_press)  -- Stop listening for the hotkey
 end
 

@@ -413,6 +413,49 @@ function lights_lum(andre)
 	return andlum
 end
 
+local purge_tmr = 0
+local function purge_stale_memory(tg)
+	if tg < purge_tmr then return end
+	purge_tmr = tg + 15000  -- Run every 15 seconds
+
+	-- Prune expired nervous squads
+	for sid, ts in pairs(nervous_squads) do
+		if tg - ts >= nervous_window then
+			nervous_squads[sid] = nil
+		end
+	end
+
+	-- Prune expired marked NPCs
+	for id, exp_t in pairs(marked) do
+		if exp_t < tg or not (level and level.object_by_id(id)) then
+			marked[id] = nil
+		end
+	end
+
+	-- Prune expired alarm boosts
+	for id, exp_t in pairs(alarm_boost) do
+		if exp_t < tg or not (level and level.object_by_id(id)) then
+			alarm_boost[id] = nil
+		end
+	end
+
+	-- Prune muzzle flashes for destroyed NPCs
+	for id in pairs(muzzle_t) do
+		if not (level and level.object_by_id(id)) then
+			muzzle_t[id] = nil
+		end
+	end
+
+	-- Prune stale visibility meters (NPCs dead or gone from online sphere for > 30s)
+	for id, l_time in pairs(vis_last) do
+		if (tg - l_time > 30000) or not (level and level.object_by_id(id)) then
+			vis_last[id] = nil
+			vis_acc[id] = nil
+			vis_decay[id] = nil
+		end
+	end
+end
+
 -- dynamic campfire lighting (ported from "NPC's can't see through foliage 1.8.2")
 function set_campfire_val()
 	-- Recompute which NPCs stand near a burning campfire (throttled to 1 Hz)
@@ -420,11 +463,7 @@ function set_campfire_val()
 	if tg < cf_tmr then return end                   -- Not yet due -> skip
 	cf_tmr = tg + 1000                               -- Next scan in 1 s
 
-	for sid, ts in pairs(nervous_squads) do          -- Prune expired nervous squads (1 Hz, cheap: table is tiny)
-		if tg - ts >= nervous_window then
-			nervous_squads[sid] = nil                 -- Window over -> drop from memory
-		end
-	end
+	purge_stale_memory(tg)                           -- Periodic maintenance for tracking tables
 
 	empty_table(campfire_npcs)                       -- Clear the previous frame's data
 
