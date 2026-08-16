@@ -148,11 +148,11 @@ gamedata/textures/ui/lightgem/bar_noise_fill.dds White fill for the noise bar (t
 
 Fully compatible with the GAMMA Alife pack — no shared files, no callback conflicts:
 
-- **xlibs 1.8.4** — no interaction (library only).
-- **AlifePlus 1.8.6** — no interaction (NPC lifecycle management; this mod's ID-based registry tolerates its spawn/despawn churn).
+- **xlibs 1.8.5** — no interaction (library only).
+- **AlifePlus 1.8.7** — no interaction (NPC lifecycle management; this mod's ID-based registry tolerates its spawn/despawn churn).
 - **AlifeBalance 1.1.3** — no interaction (smart/squad balance only).
 - **AlifeGuard 1.3.1** — no interaction (NPC guarding/sanitizer).
-- **AlifeTactics 1.1.6** — designed-in coexistence:
+- **AlifeTactics 1.2.0** — designed-in coexistence:
   - AT patches the winning `xr_danger` at runtime (function-level, on_game_start). This mod's `xr_danger.script`/`xr_danger.ltx` are the VFS winners and expose everything AT probes (`actid`, `DangerIgnoreActor`, the seven patched entry points), so AT's danger scheme runs on this mod's config values.
   - **Hidden corpses** never trigger danger, even under AT: the suppression now lives in a global `npc_on_eval_danger` subscriber (`stealth_takedown.script`) that fires under vanilla, this mod's, or AT's danger evaluator.
   - **Footstep noise**: when AT's movement-noise is enabled, hostile stalkers' footstep alerts are delegated to AT (no double `set_script_danger` stamping); this mod keeps its HUD noise bar, item-drop noise and monster alarms, and with the MCM `noise_hostile_only` option (default ON) only factions hostile to the actor react to footsteps. Toggle with the MCM `noise_handoff` option.
