@@ -170,7 +170,14 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
 ## Changelog
 
 ### 2026-08-15 — v5.13: DLTX Architecture, Memory Leak Prevention & Lifecycle Hardening
-
+- **Bug fix — `stealth_noise.script`:** The "BusyHands" error caused by the `compute_radius()` function was fixed; this function was attempting to read belt artifacts using:
+```lua
+for i = 8, 19 do
+local item = a:item_in_slot(i)
+```
+In the X-Ray / Anomaly engine, actor slots only range from 1 to 13 (knife, weapons, suit, helmet, PDA, detector, flashlight, backpack, etc.).
+Slots 14 through 19 do not exist in `item_in_slot`.
+Calling `db.actor:item_in_slot(14)` or a higher index causes a failure in the engine's C++ function due to an out-of-range index. The "BusyHandsDebug" handler in the Modded Exes intercepted the exception and forced a crash_save`.
 - **Full DLTX Modernization (`mod_*.ltx`):** Converted monolithic file replacements (`m_stalker.ltx`, `m_stalker_zombied.ltx`, `xr_danger.ltx`) into modular DLTX patches (`mod_m_stalker_stealth.ltx`, `mod_m_stalker_zombied_stealth.ltx`, `mod_xr_danger_stealth.ltx`). This ensures 100% plug-and-play compatibility with any other AI, creature or HD model mod, producing **zero file conflicts** in Mod Organizer 2.
 - **Memory Leak & Stale Data Prevention (`visual_memory_manager.script`):** Added a dedicated `purge_stale_memory` routine (running every 15 s) that cleans up tracking tables (`marked`, `alarm_boost`, `muzzle_t`, `vis_acc`, `vis_decay`, `vis_last`) for NPCs that are dead or have despawned, preventing memory bloat in long playthroughs.
 - **Corpse Hiding & Performance (`stealth_takedown.script`):** Switched corpse detection to the engine-native C++ spatial iterator `level.iterate_nearest` within a 3.0 m radius (with fallback to `db.storage`), greatly boosting search efficiency and eliminating missed dead bodies. Added periodic 30 s pruning of released corpse IDs so `m_data.stealth_corpses` never accumulates orphaned data in save files.
