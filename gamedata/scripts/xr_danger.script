@@ -48,14 +48,15 @@ end
 -- 																PUBLIC
 -----------------------------------------------------------------------------
 function set_script_danger(npc,time,who_id,pos)
+	if not (npc and npc.id) then return end
 	local id = npc:id()
 	if not script_danger[id] then
 		script_danger[id] = {}
 	end
 	script_danger[id].danger_time = time_global()
-	script_danger[id].danger_inertion = time
+	script_danger[id].danger_inertion = time or 7000
 	script_danger[id].id = who_id
-	script_danger[id].position = pos
+	script_danger[id].position = pos and vector():set(pos) or (who_id and db.storage[who_id] and db.storage[who_id].object and db.storage[who_id].object.position and vector():set(db.storage[who_id].object:position())) or nil
 end
 
 function has_danger(npc)
@@ -128,7 +129,7 @@ local function npc_on_death_callback(npc,who)
 	if (IsStalker(npc) and character_community(npc) ~= "zombied") then
 		--save_var(npc,"death_by_id",who:id())
 		local st = db.storage[npc:id()]
-		if (st) then
+		if (st and who and who.position) then
 			st.killer_last_known_position = vector():set(who:position())
 		end
 	end
@@ -139,7 +140,7 @@ local function npc_on_hit_callback(npc,amount,local_direction,who,bone_index)
 		return
 	end 
 	
-	set_script_danger(npc, 7000, who and who:id(), who and vector():set(who:position()))
+	set_script_danger(npc, 7000, who and who.id and who:id(), who and who.position and vector():set(who:position()))
 end
 
 local function get_rand_vertex(npc,vo)

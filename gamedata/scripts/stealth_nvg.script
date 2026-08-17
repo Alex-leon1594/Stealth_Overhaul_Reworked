@@ -99,18 +99,30 @@ function actor_on_update()
 end
 
 function play_or_move_particles(npc, particle_obj)
-	local eye_bone_pos = vector():set(npc:bone_position("eyelid_1"))
-	local npc_dir = vector():set(npc:direction())
-	local eye_pos = eye_bone_pos:add(npc_dir:mul(0.1))
-	eye_pos.y = eye_pos.y + 0.05 -- Directly modify the y-component to avoid creating a new vector object
-	-- play particle
-	if not (particle_obj:playing()) then
-		particle_obj:play_at_pos(eye_pos)
-	-- move particle
+	local eye_bone_pos
+	local ok, pos = pcall(function() return npc:bone_position("eyelid_1") end)
+	if ok and pos and pos:magnitude() > 0.01 then
+		eye_bone_pos = vector():set(pos)
 	else
-		particle_obj:move_to(eye_pos, VEC_ZERO)
+		local ok2, head_pos = pcall(function() return npc:bone_position("bip01_head") end)
+		if ok2 and head_pos and head_pos:magnitude() > 0.01 then
+			eye_bone_pos = vector():set(head_pos)
+		else
+			eye_bone_pos = vector():set(npc:position())
+			eye_bone_pos.y = eye_bone_pos.y + 1.6
+		end
 	end
 
+	local npc_dir = vector():set(npc:direction())
+	local eye_pos = eye_bone_pos:add(npc_dir:mul(0.1))
+	eye_pos.y = eye_pos.y + 0.05 -- Directly modify the y-component
+	
+	local zero = vector():set(0, 0, 0)
+	if not (particle_obj:playing()) then
+		particle_obj:play_at_pos(eye_pos)
+	else
+		particle_obj:move_to(eye_pos, zero)
+	end
 end
 
 function stop_if_playing(particle_obj)

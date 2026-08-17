@@ -1,4 +1,4 @@
-# Stealth_Overhaul_Reworked_v5.14
+# Stealth_Overhaul_Reworked_v5.16
 
 Complete stealth overhaul for **STALKER Anomaly** (GAMMA-compatible).
 Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full package of new stealth mechanics: noise, detection feedback, silent takedowns and a redesigned detection formula.
@@ -126,12 +126,12 @@ gamedata/scripts/
 
 gamedata/configs/
 ├── ai_tweaks/mod_xr_danger_stealth.ltx          DLTX patch for danger inertion/ignore values
-├── creatures/mod_m_stalker_stealth.ltx          DLTX patch for stalker vision parameters
-├── creatures/mod_m_stalker_zombied_stealth.ltx  DLTX patch for zombied vision parameters
-├── ui/ui_light_gem.xml           HUD statics (gem, gem_bar, det_eye, noise_bar)
-├── ui/ui_light_gem_16.xml        HUD statics (16:9)
-├── ui/ui_light_gem_21.xml        HUD statics (21:9)
-└── text/eng+rus+spa/ui_st_stealth.xml  Localized strings
+├── mod_system_stalker_stealth.ltx               DLTX system patch for stalker vision parameters
+├── mod_system_stalker_zombied_stealth.ltx       DLTX system patch for zombied vision parameters
+├── ui/ui_light_gem.xml                          HUD statics (gem, gem_bar, det_eye, noise_bar)
+├── ui/ui_light_gem_16.xml                       HUD statics (16:9)
+├── ui/ui_light_gem_21.xml                       HUD statics (21:9)
+└── text/eng+rus+spa/ui_st_stealth.xml           Localized strings
 
 gamedata/particles/stealth_nvg/
 ├── nvg_dot_green.pe   NVG eye dot — allies (green)
@@ -168,6 +168,17 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
 - Outfit noise stats are read from the `noise_k` line in the outfit section (add it to any outfit to make it quieter/louder).
 
 ## Changelog
+
+### 2026-08-17 — v5.16: Engine Hardening, Nil-Guard Safety & Performance Optimization
+- **Nil-Pointer Safety & CTD Prevention (`xr_combat_ignore.script` & `xr_danger.script`):** Fixed critical engine crash vectors where `npc_on_hit_callback` and `npc_on_death_callback` attempted to read `who:id()` or `who:position()` when `who` was nil (e.g. non-entity environmental damage, anomalies, fall damage, or script-inflicted deaths).
+- **Luminosity Vector Cache & CPU Optimization (`visual_memory_manager.script`):** Optimized `lights_lum()` with tick-level memoization (`time_global`), caching the weather vector query result across all NPC evaluations during the same frame. In crowded areas with dozens of NPCs, this eliminates repetitive engine weather table lookups and reduces CPU overhead.
+- **Model Bone Safety & Particle Robustness (`stealth_nvg.script`):** Added a multi-tier fallback for NPC eye particles (`"eyelid_1"` → `"bip01_head"` → position offset + 1.6m), preventing script errors on custom/HD stalker models lacking facial eyelid bones. Guaranteed particle object destruction on level transit (`actor_on_net_destroy` / `on_game_end`).
+- **Strict Rear-Arc Silent Takedown Check (`stealth_takedown.script`):** Added a rear half-plane dot-product check (`npc_dir:dotproduct(dir) > -0.2`) to ensure silent knife takedowns strictly require approaching from the victim's back or stealth flanks, preventing unintended frontal takedowns in deep darkness.
+- **RGB Color Clamping (`light_gem.script`):** Clamped all color channel values to `0..255` before integer floor conversion and passing to `GetARGB`, preventing integer overflow or invalid color masks.
+
+### 2026-08-17 — v5.15: Global DLTX System Injection & Vision Formula Hardening
+- **Global DLTX System Injection (`mod_system_stalker_*.ltx`):** Relocated creature vision DLTX patches from `gamedata/configs/creatures/` to `gamedata/configs/mod_system_stalker_stealth.ltx` and `mod_system_stalker_zombied_stealth.ltx`. This guarantees reliable global injection directly into the master `system.ltx` database (`pSettings`), resolving sub-include DLTX evaluation failures in G.A.M.M.A where vanilla parameters were silently retained.
+- **Vision Formula Hardening & Engine Decoupling (`visual_memory_manager.script`):** Fully decoupled `danger_mult` from the engine-passed `time_quant` variable (`danger_mult = 1.0`), preventing visual accumulation rate collapse (which previously plummeted to `0.002` on vanilla/GAMMA engine baselines). Stalkers now acquire visual targets with crisp, consistent responsiveness across all modpacks and engine versions.
 
 ### 2026-08-16 — v5.14: AlifeTactics 1.2.0 Full Integration, Point-Blank Vision Fix & Math Hardening
 - **Zero-Interference AlifeTactics 1.2.0 Integration (`stealth_noise.script`):** When `noise_handoff` is enabled (default ON) and AlifeTactics is detected, `stealth_noise.script` now cleanly skips all footstep `investigate()` calls, giving AlifeTactics (`at_noise.script` & `at_danger.script`) 100% exclusive authority over stalker footstep alerting and tactical search behavior without duplicate alert stamping or AI state conflicts. The HUD noise bar and item-drop sounds remain fully active.

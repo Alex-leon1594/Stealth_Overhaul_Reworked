@@ -133,7 +133,7 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 
 	-- Allies don't perceive the actor as a threat: they never accumulate
 	-- detection against him (eye icon, engine visibility state).
-	if who and npc and who:id() == db.actor:id() and npc:id() ~= AC_ID and IsStalker(npc) and npc:alive() then  -- npc evaluating the actor (stalkers only: monsters have no goodwill -> GetAttitude crashes)
+	if db.actor and who and npc and who:id() == AC_ID and npc:id() ~= AC_ID and IsStalker(npc) and npc:alive() then  -- npc evaluating the actor (stalkers only: monsters have no goodwill -> GetAttitude crashes)
 		local ok, gw = pcall(function() return npc:general_goodwill(db.actor) end)  -- Read goodwill safely
 		if ok and gw and gw >= (game_relations and game_relations.FRIENDS or 1000) then
 			return 0  -- Friendly NPC: never detects the actor
@@ -182,7 +182,7 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	local npc_dist = 10 / object_distance     -- Light falloff factor for the NPC's light
 
 	local luminocity_flash_r2 = luminocity    -- Base value the flash modifiers build on
-	local actor_torch_active = (who and (who:id() == db.actor:id()) and ( (torch and torch:torch_enabled()) or (flash and (flash:section() == "device_flashlight") and db.actor:active_detector()) ))  -- Actor's own light is on
+	local actor_torch_active = (who and (who:id() == AC_ID) and db.actor and ( (torch and torch:torch_enabled()) or (flash and (flash:section() == "device_flashlight") and db.actor:active_detector()) ))  -- Actor's own light is on
 	local luminocity_flash_actor_r2 = luminocity_flash_r2 + who_dist  -- Lit actor seen from afar: extra visibility
 	local npc_torch_active = (npc_torch and npc_torch:attachable_item_enabled() and (object_distance <= 25 and distance > 90))  -- NPC's torch active while the actor is far
 	local luminocity_flash_npc_r2 = luminocity_flash_r2 + npc_dist  -- Lit NPC: slightly easier to see
@@ -216,9 +216,7 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	local npc_alive = npc and npc:alive()            -- The evaluating NPC is alive
 	local is_mutant = npc_alive and IsMonster(npc)   -- The NPC is a mutant
 	local is_stalker = npc_alive and IsStalker(npc)  -- The NPC is a stalker
-	-- AHORA (inmune a variaciones de time_quant): 
-	local danger_mult = 1.0 -- Mutants accumulate danger differently (engine-relative)
-	danger_mult = is_stalker and (time_quant * 2) or danger_mult  -- Stalkers accumulate faster per quant
+	local danger_mult = 1.0                          -- Normalized base multiplier (decoupled from time_quant to prevent formula collapse)
 
 	if is_mutant and cfg.scent and who and who:id() == db.actor:id() then  -- Scent: mutant smelling the bleeding actor
 		local bleed = db.actor.bleeding or 0          -- Actor's bleeding level
@@ -434,8 +432,17 @@ function andruxa(animegif)
 	return 0.21 * x + 0.72 * y + 0.07 * z
 end
 
+local cached_lights_lum = 0.5
+local last_lights_lum_tick = 0
+
 function lights_lum(andre)
 	if andre then return andre end
+	local tg = time_global()
+	if tg == last_lights_lum_tick then
+		return cached_lights_lum
+	end
+	last_lights_lum_tick = tg
+
 	local andsun = 0.5
 	local andhem = 0.5
 	if weather and weather.get_value_vector then
@@ -444,7 +451,8 @@ function lights_lum(andre)
 		local ok2, hem = pcall(weather.get_value_vector, "hemisphere_color")
 		if ok2 and hem then andhem = andruxa(hem) end
 	end
-	return math.max(andhem, andsun)
+	cached_lights_lum = math.max(andhem, andsun)
+	return cached_lights_lum
 end
 
 local purge_tmr = 0
@@ -624,8 +632,9 @@ end
 
 function npc_on_before_hit(npc,shit,bone_id,flags)
 	-- The actor hit an NPC that did NOT see him -> mark him and his squad (they get "marked" -> max detection later)
-	if not npc or not npc:alive() then return end  -- Engine fires this even for dead objects; see() on a corpse errors out
-	if shit and shit.draftsman and shit.draftsman:id() == db.actor:id() then         -- The attacker is the actor
+	if not (npc and npc:alive()) then return end  -- Engine fires this even for dead objects; see() on a corpse errors out
+	if not db.actor then return end
+	if shit and shit.draftsman and shit.draftsman:id() == AC_ID then         -- The attacker is the actor
 		if npc:see(db.actor) then 
 			return                                        -- NPC saw the hit coming -> no mark
 		else
@@ -636,7 +645,6 @@ function npc_on_before_hit(npc,shit,bone_id,flags)
 				for m in squad:squad_members() do        -- Mark every online squad member
 					local member = level.object_by_id(m.id)
 					if member and member.alive and member:alive() then
-						marked[member:id()] = marked[member:id()] or true
 						marked[member:id()] = tg + MARK_DURATION
 					end
 				end

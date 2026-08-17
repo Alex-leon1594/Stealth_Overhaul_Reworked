@@ -61,22 +61,22 @@ local function try_takedown()
 	local best
 	local best_dot = -2
 
-	for id, npc in pairs(stealth_noise.online_npcs) do
-		if type(npc) ~= "userdata" then
-			npc = level and level.object_by_id(id)
-		end
+	for id in pairs(stealth_noise.online_npcs) do
+		local npc = level and level.object_by_id(id)
 		if npc and alive(npc) and IsStalker(npc) and npc:id() ~= AC_ID then
 			if npc:position():distance_to_sqr(ap) <= 4.84 then
 				if not npc:see(db.actor) and not npc:best_enemy() then
 					local st = db.storage[id]
-					local vma = visual_memory_manager.alarm_boost[id]
+					local vma = visual_memory_manager.alarm_boost and visual_memory_manager.alarm_boost[id]
 					if not (st and st.danger_flag) and not (vma and vma > tg) then
 						local dir = vector():set(npc:position()):sub(ap)
 						local ml = dir:magnitude()
 						if ml > 0.01 then
 							dir:mul(1 / ml)
 							local dot = fwd:dotproduct(dir)
-							if dot > best_dot then
+							local npc_dir = vector():set(npc:direction())
+							local behind_dot = npc_dir:dotproduct(dir)
+							if dot > best_dot and behind_dot > -0.2 then
 								best_dot = dot
 								best = npc
 							end

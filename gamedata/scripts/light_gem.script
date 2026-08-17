@@ -160,12 +160,12 @@ function StealthIcon:Update()
 		local r, g, b
 		if pct < 0.5 then
 			local t = pct * 2        -- 0..1 over the green->yellow half
-			r, g, b = 255 * t, 255, 0  -- (0,255,0) green -> (255,255,0) yellow
+			r, g, b = clamp(255 * t, 0, 255), 255, 0  -- (0,255,0) green -> (255,255,0) yellow
 		else
 			local t = (pct - 0.5) * 2  -- 0..1 over the yellow->red half
-			r, g, b = 255, 255 * (1 - t), 0  -- yellow -> (255,0,0) red
+			r, g, b = 255, clamp(255 * (1 - t), 0, 255), 0  -- yellow -> (255,0,0) red
 		end
-		self.noise:SetColor(GetARGB(255, r, g, b))  -- Apply the gradient colour
+		self.noise:SetColor(GetARGB(255, math.floor(r), math.floor(g), math.floor(b)))  -- Apply the gradient colour
 
 		self.noise:SetWndPos(vector2():set(xx + 32, yy - 24))  -- Right of the 24-px gem (8 px gap), centred on its height: bar is 80 px tall vs gem 32 px -> (32-80)/2 = -24
 	end
@@ -195,8 +195,9 @@ function StealthIcon:StatUpd()
 	end
 
 	local val = TINT_MAX - clamp(TINT_MAX * LUM_MULT * gem_lum, 0, TINT_MAX)  -- Invert: high light -> low val -> bright gem
+	local c_val = clamp(math.floor(255 - val), 0, 255)
 
-	local gem_color = GetARGB(255,255-val,255-val,255-val)  -- Grayscale tint (bright gem when well lit)
+	local gem_color = GetARGB(255, c_val, c_val, c_val)  -- Grayscale tint (bright gem when well lit)
 	self.gem:SetTextureColor(gem_color)                     -- Apply the tint to the gem texture
 
 end
