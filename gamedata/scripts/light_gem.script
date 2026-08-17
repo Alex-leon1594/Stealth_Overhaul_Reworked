@@ -52,10 +52,10 @@ function upd_hud()
 	noise_bar_override = nil  -- Any MCM change resets the keybind override (the checkbox regains control)
 	if cfg.icon then
 		activate_hud()     -- Icon enabled -> make sure the HUD dialog exists
-		stealth_log.log("HUD icon: enabled (mode " .. (cfg.icon_type or 1) .. ")")  -- Log the HUD state
+		stealth_log.log("HUD icon: enabled (mode " .. (cfg.icon_type or 1) .. ")", "HUD")
 	else
 		deactivate_hud()   -- Icon disabled -> destroy the HUD dialog
-		stealth_log.log("HUD icon: disabled")  -- Log the HUD state
+		stealth_log.log("HUD icon: disabled", "HUD")
 	end
 
 	-- if icon enabled then update its type
@@ -89,7 +89,7 @@ function on_key_press(key)
 
 	local msg = noise_bar_override and "ui_st_stealth_noise_bar_on" or "ui_st_stealth_noise_bar_off"  -- Localized tip string
 	pcall(function() actor_menu.set_msg(1, game.translate_string(msg), 3) end)  -- HUD tip (safe)
-	stealth_log.log("Noise bar keybind: " .. (noise_bar_override and "ON" or "OFF"))  -- Log the toggle
+	stealth_log.log("Noise bar keybind: " .. (noise_bar_override and "ON" or "OFF"), "HUD")
 end
 
 function on_game_start()

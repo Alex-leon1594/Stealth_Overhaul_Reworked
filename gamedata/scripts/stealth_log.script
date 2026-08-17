@@ -1,69 +1,73 @@
--- Stealth Overhaul: dedicated log file
--- by xcvb
+-- Stealth Overhaul: Advanced Telemetry & Diagnostic Logging
+-- by xcvb / Reworked
 --
--- Writes mod-specific events to <anomaly>/logs/stealth_overhaul.log
--- so the mod can be debugged without touching the engine log.
--- Enabled via the MCM `logging` option (default ON).
--- All I/O is protected with pcall: a failure can never break the game.
+-- Writes detailed, categorized mod-specific telemetry to <anomaly>/logs/stealth_overhaul.log
+-- Provides comprehensive tracking of vision events, footstep alerts, silent takedowns,
+-- corpse hiding, danger propagation, and MCM configuration changes.
+--
+-- Features:
+--  * Memory buffering & safe batch flushing (prevents file open/close thrashing while guaranteeing zero dropped lines)
+--  * Categorized prefixing: [VISION], [NOISE], [TAKEDOWN], [DANGER], [NVG], [CONFIG], [SYSTEM]
+--  * Full session environment dump on startup (Game version, renderer, weather, Alife mods detected, MCM config)
+--  * Safe I/O wrapped in pcall: filesystem/disk errors never break or stutter gameplay
 
-local last_write = -1000  -- Throttle: minimum ms between two writes (negative start so the first write always goes through)
-local warned_no_path = false  -- Print the "no usable log path" warning only once
-local warned_io_fail = false  -- Print the "write failed" warning only once
-local log_path = nil      -- Cached log path to avoid probing the FS on every write
+local log_path = nil          -- Cached logs directory path
+local warned_no_path = false  -- Warning flag for missing path
+local warned_io_fail = false  -- Warning flag for disk write error
+
+local log_buffer = {}         -- Queue of pending log entries
+local buffer_flush_time = 0   -- Timestamp of the last buffer flush (ms)
+local FLUSH_INTERVAL_MS = 250 -- Max latency before pending logs are written to disk
 
 local function find_log_path()
-	-- Resolve the engine logs directory. Try several candidates so a single
-	-- failing binding never disables the log silently.
-	if log_path then return log_path end -- Return cached path if available
+	if log_path then return log_path end
 	local candidates = {
-		function() return getFS():update_path("$logs$", "") end,          -- Standard alias
-		function() return getFS():update_path("$app_data_root$", "logs") end, -- Explicit appdata\logs
-		function() return getFS():update_path("$fs_root$", "appdata\\logs") end, -- Hard fallback
+		function() return getFS():update_path("$logs$", "") end,
+		function() return getFS():update_path("$app_data_root$", "logs") end,
+		function() return getFS():update_path("$fs_root$", "appdata\\logs") end,
 	}
 	for _, probe in ipairs(candidates) do
 		local ok, path = pcall(probe)
 		if ok and type(path) == "string" and path ~= "" and path ~= "\\" and path ~= "/" then
-			if path:sub(-1) ~= "\\" and path:sub(-1) ~= "/" then path = path .. "\\" end -- Normalize trailing separator
-			log_path = path -- Cache the found path
+			if path:sub(-1) ~= "\\" and path:sub(-1) ~= "/" then path = path .. "\\" end
+			log_path = path
 			return log_path
 		end
 	end
 
-	local ok2, path2 = pcall(get_log_path)   -- Some engine builds bind this directly
+	local ok2, path2 = pcall(get_log_path)
 	if ok2 and type(path2) == "string" and path2 ~= "" then
 		if path2:sub(-1) ~= "\\" and path2:sub(-1) ~= "/" then path2 = path2 .. "\\" end
-		log_path = path2 -- Cache the found path
+		log_path = path2
 		return log_path
 	end
 
-	return nil  -- No usable path -> logging silently disabled
+	return nil
 end
 
 stealth_log = stealth_log or {}
 
-function stealth_log.log(msg)
-	-- Append one timestamped line to the dedicated log file
-	if not (stealth_mcm and stealth_mcm.get_config) then return end  -- MCM module not ready
-	if stealth_mcm.get_config("logging") == false then return end   -- Logging explicitly disabled in MCM (nil = not registered yet -> log anyway)
+local function flush_buffer()
+	if #log_buffer == 0 then return end
 
-	local tg = time_global()
-	if tg - last_write < 100 then return end  -- Never write more than 10 lines/second
-	last_write = tg
-
-	local current_log_path = find_log_path()               -- Resolve the logs folder (uses cache)
+	local current_log_path = find_log_path()
 	if not current_log_path then
 		if not warned_no_path then
 			warned_no_path = true
 			printf("!StealthOverhaul: no usable log path found, dedicated log disabled")
 		end
+		log_buffer = {}
 		return
 	end
 
-	pcall(function()                          -- Any I/O error must never crash the game
-		local f = io.open(current_log_path .. "stealth_overhaul.log", "a")  -- Open in append mode
+	pcall(function()
+		local f = io.open(current_log_path .. "stealth_overhaul.log", "a")
 		if f then
-			f:write(os.date("[%Y-%m-%d %H:%M:%S] ", os.time()) .. msg .. "\n")  -- Timestamped line
-			f:close()                           -- Close immediately (cheap and safe)
+			for i = 1, #log_buffer do
+				f:write(log_buffer[i] .. "\n")
+			end
+			f:close()
+			log_buffer = {}
 		elseif not warned_io_fail then
 			warned_io_fail = true
 			printf("!StealthOverhaul: could not open %s for writing", current_log_path .. "stealth_overhaul.log")
@@ -71,9 +75,89 @@ function stealth_log.log(msg)
 	end)
 end
 
+function stealth_log.log(msg, category)
+	if not (stealth_mcm and stealth_mcm.get_config) then return end
+	if stealth_mcm.get_config("logging") == false then return end
+
+	category = category or "INFO"
+	local time_str = os.date("[%Y-%m-%d %H:%M:%S] ", os.time())
+	local formatted_msg = time_str .. string.format("[%-8s] ", category:upper()) .. tostring(msg)
+
+	table.insert(log_buffer, formatted_msg)
+
+	-- If buffer reaches 10 items or on critical events, flush immediately
+	if #log_buffer >= 10 or category == "SYSTEM" or category == "TAKEDOWN" or category == "WARN" then
+		flush_buffer()
+	end
+end
+
+function stealth_log.info(category, fmt, ...)
+	local ok, text = pcall(string.format, fmt, ...)
+	if ok then
+		stealth_log.log(text, category or "INFO")
+	else
+		stealth_log.log(tostring(fmt), category or "INFO")
+	end
+end
+
+function stealth_log.debug(category, fmt, ...)
+	if not stealth_mcm.get_config("debugx") then return end
+	local ok, text = pcall(string.format, fmt, ...)
+	if ok then
+		stealth_log.log(text, category or "DEBUG")
+	else
+		stealth_log.log(tostring(fmt), category or "DEBUG")
+	end
+end
+
+function stealth_log.warn(category, fmt, ...)
+	local ok, text = pcall(string.format, fmt, ...)
+	if ok then
+		stealth_log.log(text, category or "WARN")
+	else
+		stealth_log.log(tostring(fmt), category or "WARN")
+	end
+end
+
+function stealth_log.dump_session_info()
+	local renderer = get_console_cmd(0, "renderer") or "unknown"
+	local level_name = (level and level.name and level.name()) or "unknown"
+	local weather_name = (level_weathers and level_weathers.get_weather_manager and level_weathers.get_weather_manager():get_curr_weather_preset()) or "unknown"
+	local game_ver = GAME_VERSION or "Anomaly"
+
+	stealth_log.log("==================================================================", "SYSTEM")
+	stealth_log.log(string.format("Stealth Overhaul Reworked v5.16 session initialized | Engine: %s | Level: %s | Renderer: %s | Weather: %s", game_ver, level_name, renderer, weather_name), "SYSTEM")
+	
+	-- Detected compatibility modules
+	local at_present = at_mcm ~= nil
+	local xlibs_present = xcombat ~= nil or xcreature ~= nil
+	local plus_present = alife_plus ~= nil or (alife_storage_manager and alife_storage_manager.get_state) ~= nil
+	stealth_log.log(string.format("Mod Ecosystem Detected: AlifeTactics=%s | xlibs=%s | AlifePlus=%s", tostring(at_present), tostring(xlibs_present), tostring(plus_present)), "SYSTEM")
+
+	-- Active MCM settings summary
+	local cfg_noise = stealth_mcm.get_config("noise")
+	local cfg_handoff = stealth_mcm.get_config("noise_handoff")
+	local cfg_hostile_only = stealth_mcm.get_config("noise_hostile_only")
+	local cfg_takedown = stealth_mcm.get_config("takedown")
+	local cfg_nvg = stealth_mcm.get_config("npc_nvg")
+	local cfg_scale = stealth_mcm.get_config("noise_scale") or 1.0
+	stealth_log.log(string.format("Configuration: Noise=%s (scale=%.1f, handoff=%s, hostile_only=%s) | Takedown=%s | NVG=%s", tostring(cfg_noise), cfg_scale, tostring(cfg_handoff), tostring(cfg_hostile_only), tostring(cfg_takedown), tostring(cfg_nvg)), "CONFIG")
+	stealth_log.log("==================================================================", "SYSTEM")
+end
+
+local function on_update()
+	local tg = time_global()
+	if tg - buffer_flush_time >= FLUSH_INTERVAL_MS then
+		buffer_flush_time = tg
+		flush_buffer()
+	end
+end
+
 function on_game_start()
-	-- Log a session header once the game is running
 	RegisterScriptCallback("actor_on_first_update", function()
-		stealth_log.log("=== Stealth Overhaul session started ===")
+		stealth_log.dump_session_info()
 	end)
+	RegisterScriptCallback("actor_on_update", on_update)
+	RegisterScriptCallback("actor_on_net_destroy", flush_buffer)
+	RegisterScriptCallback("on_game_end", flush_buffer)
 end

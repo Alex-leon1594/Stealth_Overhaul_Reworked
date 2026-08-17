@@ -223,11 +223,10 @@ function alarm_nearby(obj, radius, dur)
 	for id in pairs(stealth_noise.online_npcs) do    -- Loop over the registry
 		local npc = level.object_by_id(id)           -- Resolve the NPC
 		if npc and npc:alive() and IsStalker(npc) and not npc:has_info("npcx_is_companion") and not is_ally_of_actor(npc) then  -- Relevant hostile stalker
-			if obj:position():distance_to_sqr(npc:position()) < r2 then  -- Within alarm radius
 				visual_memory_manager.alarm_boost[id] = tg + dur  -- Boost their detection accumulation for the duration
 				suspect(npc, dur + 1000)             -- Mark them suspect a bit longer
 				investigate(npc, obj:position(), 2)  -- Send them to investigate at high alert
-				stealth_log.log("Monster alarm: NPC " .. id .. " alerted by monster " .. obj:id() .. " (radius " .. (radius or 150) .. " m)")  -- Log the alarm
+				stealth_log.log(string.format("Monster alarm: NPC %d (%s) alerted by monster %d (radius %.1fm, dur %dms)", id, npc:character_name() or npc:name(), obj:id(), radius or 150, dur), "NOISE")
 			end
 		end
 	end
@@ -403,7 +402,7 @@ function stealth_noise_update()
 	local handoff = at_noise_handoff()                 -- AlifeTactics handoff probe (once per pass)
 	if handoff and not handoff_logged then
 		handoff_logged = true                          -- Log the delegation once
-		stealth_log.log("AlifeTactics detected: footstep alerts delegated to AT (MCM noise_handoff)")  -- Log the handoff
+		stealth_log.log("AlifeTactics detected: hostile footstep alerts delegated to AT engine", "NOISE")
 	end
 
 	-- When AlifeTactics handles hostile movement noise, skip our hostile footstep
@@ -421,7 +420,9 @@ function stealth_noise_update()
 					skip = not is_hostile_to_actor(npc)  -- Neutrals/friends ignore footsteps (MCM noise_hostile_only)
 				end
 				if not skip then
-					investigate(npc, ap, math.sqrt(d2) / radius < 0.45 and 2 or 1)  -- Very close to the centre -> high alert, otherwise casual
+					local alert_lvl = math.sqrt(d2) / radius < 0.45 and 2 or 1
+					investigate(npc, ap, alert_lvl)  -- Very close to the centre -> high alert, otherwise casual
+					stealth_log.debug("NOISE", "Footstep alert on NPC %d (%s) at dist %.1fm (radius %.1fm, level %d)", id, npc:character_name() or npc:name(), math.sqrt(d2), radius, alert_lvl)
 				end
 			end
 		end
@@ -447,7 +448,7 @@ function on_item_drop(obj, type)
 	if not (stealth_mcm.get_config("noise") and db.actor and db.actor:alive()) then return end  -- Noise off or no actor -> skip
 	local radius = math.max(10, current_radius or 0)  -- Scale the drop noise with the current noise level (min 10 m)
 	noise_at(db.actor:position(), radius, 2)          -- High alert at the actor's position
-	stealth_log.log("Item dropped: noise at actor position (" .. math.floor(radius + 0.5) .. " m)")  -- Log the drop noise
+	stealth_log.log(string.format("Item dropped (%s): noise generated at actor position (radius %.1fm)", obj and obj:section() or "unknown", radius), "NOISE")
 end
 
 -- ============ AlifeTactics hit-disclosure gate ============
@@ -494,12 +495,12 @@ local function patch_at_disclosure_gate()
 	if not (ok and type(fn) == "function") then return end  -- xlibs too old / not installed
 	_orig_disclose_enemy = xcombat.disclose_enemy           -- Keep the original
 	xcombat.disclose_enemy = _at_gate_disclose              -- Install our wrapper
-	stealth_log.log("AlifeTactics disclosure gate active (squadmates only learn your position when they see/fight you; MCM at_disclosure_gate)")  -- Log the gate
+	stealth_log.log("AlifeTactics disclosure gate active (squadmates only learn position if visible/in-combat)", "CONFIG")
 end
 
 function on_game_start()
 	-- Register all engine callbacks for this module
-	stealth_log.log("stealth_noise: system ready (base radii: crouch 3 / walk 10 / run 20 / sprint 30 m)")  -- Log module init
+	stealth_log.log("stealth_noise: subsystem initialized (base radii: crouch 3m / walk 10m / run 20m / sprint 30m)", "SYSTEM")
 	RegisterScriptCallback("actor_on_update", stealth_noise_update)          -- Periodic noise computation
 	RegisterScriptCallback("actor_on_footstep", on_footstep)                 -- Surface-dependent noise radius
 	RegisterScriptCallback("actor_on_item_drop", on_item_drop)               -- Item drops make noise

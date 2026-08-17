@@ -57,6 +57,9 @@ function set_script_danger(npc,time,who_id,pos)
 	script_danger[id].danger_inertion = time or 7000
 	script_danger[id].id = who_id
 	script_danger[id].position = pos and vector():set(pos) or (who_id and db.storage[who_id] and db.storage[who_id].object and db.storage[who_id].object.position and vector():set(db.storage[who_id].object:position())) or nil
+	if stealth_log and stealth_log.debug then
+		stealth_log.debug("DANGER", "Script danger stamped on NPC %d (%s) | duration: %dms | target_id: %s", id, npc:character_name() or npc:name(), script_danger[id].danger_inertion, tostring(who_id))
+	end
 end
 
 function has_danger(npc)

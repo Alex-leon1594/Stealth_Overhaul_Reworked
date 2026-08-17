@@ -179,7 +179,7 @@ function stealth_ui_update()
 	end
 	if eye_state ~= last_eye_state then
 		last_eye_state = eye_state                     -- Log only state transitions
-		stealth_log.log("Detection state: " .. eye_state .. " (meter " .. string.format("%.0f", det * 100) .. "%)")
+		stealth_log.log(string.format("Detection eye transitioned to '%s' (accumulated meter: %.0f%%)", eye_state, det * 100), "HUD")
 	end
 	det_eye:SetTextureColor(GetARGB(255, r, g, b))     -- Apply the colour to the eye texture
 end

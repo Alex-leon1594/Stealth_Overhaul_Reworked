@@ -269,19 +269,25 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 			vision_memory[npc:id()] = {}             -- Create the inner table
 			vision_memory[npc:id()][who:id()] = true -- Mark the sighting
 			if who:id() == AC_ID and IsStalker(npc) then  -- Actor was seen by a stalker
+				stealth_log.log(string.format("Player spotted by %s (ID %d, %s, %s) at distance %.1fm", npc:character_name() or npc:name(), npc:id(), character_community(npc) or "unknown", (ranks and ranks.get_obj_rank_name and ranks.get_obj_rank_name(npc)) or "unknown", object_distance), "VISION")
 				local squad_alert_range = cfg.squad_alert_range  -- MCM: squad alert radius (0 = off)
 				local squad_alert_dur = cfg.squad_alert_dur      -- MCM: squad alert duration
 				local squad = get_object_squad(npc)  -- Their squad
 				if squad and squad_alert_range > 0 then
 					local r2 = squad_alert_range ^ 2   -- Squared range for distance checks
+					local count = 0
 					for m in squad:squad_members() do  -- Loop over squad members
 						local mid = m.id             -- Member id
 						if mid ~= npc:id() and db.storage[mid] and db.storage[mid].object then  -- Other online member
 							local member = db.storage[mid].object
 							if member:alive() and member:position():distance_to_sqr(npc:position()) < r2 then  -- Within MCM range
 								alarm_boost[mid] = time_global() + squad_alert_dur  -- Boost their detection for the duration
+								count = count + 1
 							end
 						end
+					end
+					if count > 0 then
+						stealth_log.log(string.format("Squad alarm: %s alerted %d squadmates (range %.0fm, dur %dms)", npc:character_name() or npc:name(), count, squad_alert_range, squad_alert_dur), "VISION")
 					end
 				end
 			end
@@ -640,6 +646,7 @@ function npc_on_before_hit(npc,shit,bone_id,flags)
 		else
 			local tg = time_global()
 			marked[npc:id()] = tg + MARK_DURATION        -- Mark the hit NPC (expires; refreshed by a new unseen hit)
+			stealth_log.log(string.format("Unseen hit on NPC %d (%s): marked with full alert for %ds", npc:id(), npc:character_name() or npc:name(), MARK_DURATION / 1000), "DANGER")
 			local squad = get_object_squad(npc)          -- Their squad
 			if squad and squad.commander_id then
 				for m in squad:squad_members() do        -- Mark every online squad member

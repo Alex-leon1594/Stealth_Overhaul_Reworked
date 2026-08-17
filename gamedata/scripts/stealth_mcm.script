@@ -98,3 +98,23 @@ function on_mcm_load()
 
 	return op  -- Hand the menu definition to MCM
 end
+
+local prev_configs = {}
+
+local function on_option_change(mcm)
+	if not stealth_log then return end
+	for k, _ in pairs(defaults) do
+		local cur = get_config(k)
+		if prev_configs[k] ~= nil and prev_configs[k] ~= cur then
+			stealth_log.log(string.format("MCM option '%s' changed: %s -> %s", k, tostring(prev_configs[k]), tostring(cur)), "CONFIG")
+		end
+		prev_configs[k] = cur
+	end
+end
+
+function on_game_start()
+	for k in pairs(defaults) do
+		prev_configs[k] = get_config(k)
+	end
+	RegisterScriptCallback("on_option_change", on_option_change)
+end

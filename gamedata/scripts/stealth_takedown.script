@@ -109,7 +109,10 @@ local function try_takedown()
 	takedown_cd = tg + 1000
 	news_manager.send_tip(db.actor, "Silent takedown", 0, nil, 1500)
 	notify_silent_kill(best)
-	stealth_log.log("Silent takedown: NPC " .. best:id() .. " killed")  -- Log the takedown
+	local victim_name = best:character_name() or best:name()
+	local victim_comm = character_community(best) or "unknown"
+	local victim_rank = (ranks and ranks.get_obj_rank_name and ranks.get_obj_rank_name(best)) or "unknown"
+	stealth_log.log(string.format("Silent takedown: %s (ID %d, %s, %s) eliminated with %s", victim_name, best:id(), victim_comm, victim_rank, wpn and wpn:section() or "knife"), "TAKEDOWN")
 	if victim_squad_id and visual_memory_manager and visual_memory_manager.mark_squad_nervous then
 		visual_memory_manager.mark_squad_nervous(victim_squad_id, time_global())  -- Squad gets a temporary perception bonus
 	end
@@ -168,7 +171,7 @@ function stealth_takedown_update()
 						pcall(function() npc:set_corpse_ready(false) end)
 						pcall(function() npc:set_visible(false) end)
 						news_manager.send_tip(db.actor, "Corpse hidden", 0, nil, 1500)
-						stealth_log.log("Corpse hidden: NPC " .. id)  -- Log the hidden corpse
+						stealth_log.log(string.format("Corpse hidden: NPC %d (%s) at distance %.1fm", id, npc:character_name() or npc:name(), math.sqrt(pos:distance_to_sqr(ap))), "TAKEDOWN")
 					end
 				end
 			end
@@ -215,7 +218,7 @@ function load_state(m_data)
 		end
 	end
 	if restored > 0 then
-		stealth_log.log("Corpse hiding: restored " .. restored .. " hidden corpse(s) from save")  -- Log the restore
+		stealth_log.log("Corpse hiding: restored " .. restored .. " hidden corpse(s) from save state", "SYSTEM")
 	end
 end
 
