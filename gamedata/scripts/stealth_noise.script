@@ -363,7 +363,8 @@ local function at_noise_handoff()
 	-- system is enabled, hostile stalkers' footstep alerting is delegated to AT
 	-- (its own radii and set_script_danger), avoiding double danger stamping.
 	-- Our system keeps the HUD bar, item-drop noise, monster alarms and
-	-- neutral-NPC investigation. Disable via the MCM `noise_handoff` option.
+	-- neutral-NPC investigation (hostiles only are skipped). Disable via the
+	-- MCM `noise_handoff` option.
 	if not stealth_mcm.get_config("noise_handoff") then return false end
 	if not at_mcm then return false end
 	local ok, v = pcall(function() return at_mcm.get_config("danger_move_noise") end)
@@ -402,19 +403,21 @@ function stealth_noise_update()
 	local handoff = at_noise_handoff()                 -- AlifeTactics handoff probe (once per pass)
 	if handoff and not handoff_logged then
 		handoff_logged = true                          -- Log the delegation once
-		stealth_log.log("AlifeTactics detected: hostile footstep alerts delegated to AT (MCM noise_handoff)")  -- Log the handoff
+		stealth_log.log("AlifeTactics detected: footstep alerts delegated to AT (MCM noise_handoff)")  -- Log the handoff
 	end
+
+	-- When AlifeTactics handles hostile movement noise, skip our hostile footstep
+	-- investigate calls so AT's at_noise / at_danger owns hostile reactions, but
+	-- keep neutral-NPC investigation (AT only alerts hostiles).
 	for id in pairs(stealth_noise.online_npcs) do      -- Loop over all tracked NPCs
 		local npc = level.object_by_id(id)             -- Resolve the NPC
 		if npc and npc:alive() and IsStalker(npc) then  -- Alive stalker
 			local d2 = npc:position():distance_to_sqr(ap)  -- Squared distance to the actor
 			if d2 < r2 then                            -- Inside the noise sphere
-				local skip = false                     -- AlifeTactics covers hostile footstep alerts
-				if handoff then
-					local ok, rel = pcall(function() return npc:relation(db.actor) end)
-					skip = ok and rel == game_object.enemy
-				end
-				if not skip and stealth_mcm.get_config("noise_hostile_only") then
+				local skip = false
+				if handoff and is_hostile_to_actor(npc) then
+					skip = true  -- Hostile footstep alerts delegated to AT
+				elseif stealth_mcm.get_config("noise_hostile_only") then
 					skip = not is_hostile_to_actor(npc)  -- Neutrals/friends ignore footsteps (MCM noise_hostile_only)
 				end
 				if not skip then

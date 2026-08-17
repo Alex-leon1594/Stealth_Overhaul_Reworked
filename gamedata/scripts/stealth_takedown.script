@@ -38,9 +38,7 @@ local function notify_silent_kill(victim)
 	local weapon = db.actor and db.actor:active_item()
 	pcall(SendScriptCallback, "npc_on_death_callback", victim, weapon)
 	pcall(SendScriptCallback, "npc_on_silent_kill_callback", victim, db.actor, weapon, true)
-	if last_s_killed ~= nil then
-		last_s_killed = victim:id()
-	end
+	last_s_killed = victim:id()  -- Track the last silent kill as a global (Stealth Kill Detection Fix reads it)
 	pcall(function()
 		local stats = game_statistics.actor_statistics
 		if not stats["silent_kills"] then
@@ -134,8 +132,9 @@ function stealth_takedown_update()
 
 	if tg - corpse_cleanup_timer > 30000 then          -- Prune the corpse registry once every 30 s
 		corpse_cleanup_timer = tg
+		local sim = alife()
 		for id, c in pairs(corpses) do
-			if not (stealth_noise.online_npcs[id]) then corpses[id] = nil end
+			if not (sim and sim:object(id)) then corpses[id] = nil end
 		end
 	end
 

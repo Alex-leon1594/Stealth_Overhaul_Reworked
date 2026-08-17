@@ -40,25 +40,46 @@ alarm_boost = {}  -- Global: per-NPC alarm deadline (ms) set by noise/monster al
 -- Cached MCM settings for performance. Reading from MCM is slow, so we read them once
 -- and on change, and store them in this local table for fast access inside the
 -- performance-critical get_visible_value() hook.
-local cfg = {}
+local cfg = {
+	memory = 1,
+	luminocity = 1,
+	distance = 1,
+	velocity = 1,
+	weight = 1,
+	crouch = 0.4,
+	low_crouch = 0.25,
+	michiko_patch = false,
+	nvg_val = 1,
+	npc_flash = false,
+	scent = true,
+	adaptation = true,
+	glare = true,
+	community = true,
+	npc_nvg = true,
+	squad_alert_range = 200,
+	squad_alert_dur = 3000,
+	debugx = false,
+}
 function update_mcm_cache()
-	cfg.memory = stealth_mcm.get_config("memory")
-	cfg.luminocity = stealth_mcm.get_config("luminocity")
-	cfg.distance = stealth_mcm.get_config("distance")
-	cfg.velocity = stealth_mcm.get_config("velocity")
-	cfg.weight = stealth_mcm.get_config("weight")
-	cfg.crouch = stealth_mcm.get_config("crouch")
-	cfg.low_crouch = stealth_mcm.get_config("low_crouch")
+	if not (stealth_mcm and stealth_mcm.get_config) then return end
+	cfg.memory = stealth_mcm.get_config("memory") or 1
+	cfg.luminocity = stealth_mcm.get_config("luminocity") or 1
+	cfg.distance = stealth_mcm.get_config("distance") or 1
+	cfg.velocity = stealth_mcm.get_config("velocity") or 1
+	cfg.weight = stealth_mcm.get_config("weight") or 1
+	cfg.crouch = stealth_mcm.get_config("crouch") or 0.4
+	cfg.low_crouch = stealth_mcm.get_config("low_crouch") or 0.25
 	cfg.michiko_patch = stealth_mcm.get_config("michiko_patch")
-	cfg.nvg_val = stealth_mcm.get_config("nvg_val")
+	cfg.nvg_val = stealth_mcm.get_config("nvg_val") or 1
 	cfg.npc_flash = stealth_mcm.get_config("npc_flash")
 	cfg.scent = stealth_mcm.get_config("scent")
 	cfg.adaptation = stealth_mcm.get_config("adaptation")
 	cfg.glare = stealth_mcm.get_config("glare")
 	cfg.community = stealth_mcm.get_config("community")
 	cfg.npc_nvg = stealth_mcm.get_config("npc_nvg")
-	cfg.squad_alert_range = stealth_mcm.get_config("squad_alert_range")
-	cfg.squad_alert_dur = stealth_mcm.get_config("squad_alert_dur")
+	cfg.squad_alert_range = stealth_mcm.get_config("squad_alert_range") or 200
+	cfg.squad_alert_dur = stealth_mcm.get_config("squad_alert_dur") or 3000
+	cfg.debugx = stealth_mcm.get_config("debugx")
 end
 
 -- Persistent "nervous squad" system: after a silent takedown, the victim's
@@ -125,15 +146,15 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	-- main
 	local michiko_patch = cfg.michiko_patch  -- Alternative night-luminosity curve flag
 	local hrs = level.get_time_hours() + level.get_time_minutes() / 60  -- Current time of day in hours (fractional)
-	local who_lum = who:get_luminocity()  -- Light level at the seen object ("who")
+	local who_lum = (who and who.get_luminocity and who:get_luminocity()) or 0.5  -- Light level at the seen object ("who")
 	local lumin_r1 = luminocity <= 0 and 0.0001 or luminocity  -- r1 renderer light value (never 0)
-	local lumin_r2 = (who_lum + who_lum^0.5 + lights_lum()) / 3.02  -- Combined light: object + sqrt + global sun/hemisphere
+	local lumin_r2 = (who_lum + who_lum^0.5 + lights_lum()) / 2.35  -- Combined light: object + sqrt + global sun/hemisphere
 
 	-- night vision: only NPCs that actually own NVG (rank-gated, stealth_nvg) get the boost
 	local npc_nvg_on = cfg.npc_nvg  -- NVG system enabled in MCM
 	local npc_has_nvg = npc_nvg_on and stealth_nvg and stealth_nvg.has_nvg and stealth_nvg.has_nvg(npc) or false  -- This NPC owns NVGs?
 	local nvg_val = npc_has_nvg and (cfg.nvg_val or 1) or 1  -- Their NVG sight multiplier
-	local lumin_r2_night = clamp((lumin_r2 * 2)^1.6, 0.01, 0.99) * nvg_val  -- Night light curve (steep), scaled by NVG
+	local lumin_r2_night = clamp((lumin_r2 * 3.5)^1.6, 0.01, 0.99) * nvg_val  -- Night light curve, scaled by NVG
 	local lumin_r2_night_michiko = clamp(((lumin_r2 * 7)^3), 0.01, 0.99)  -- Michiko variant: even steeper/brighter
 	lumin_r2_night = michiko_patch and lumin_r2_night_michiko or lumin_r2_night  -- Pick the active curve
 
@@ -181,7 +202,7 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	if is_night and get_camo_k > 0 then camo_tot = camo_tot * 1.3 end  -- Camo works better at night
 	local camo_x = camo_checks and camo_tot or 1     -- Final camo multiplier (1 = no camo bonus)
 
-	local w = db.actor:get_total_weight()            -- Actor's carried weight in kg
+	local w = (db.actor and db.actor.get_total_weight and db.actor:get_total_weight()) or 0  -- Actor's carried weight in kg
 	local wei = math.exp(w/100)                      -- Exponential weight factor (heavy = loud/bulky)
 	local odw = 1.1 - 0.02 * object_distance         -- Weight visibility drops with distance
 	local obj_dist_w = odw > 0.01 and odw or 0.01    -- Clamp the distance weight factor
@@ -195,7 +216,8 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	local npc_alive = npc and npc:alive()            -- The evaluating NPC is alive
 	local is_mutant = npc_alive and IsMonster(npc)   -- The NPC is a mutant
 	local is_stalker = npc_alive and IsStalker(npc)  -- The NPC is a stalker
-	local danger_mult = is_mutant and (0.003 / time_quant) or 1  -- Mutants accumulate danger differently (engine-relative)
+	-- AHORA (inmune a variaciones de time_quant): 
+	local danger_mult = 1.0 -- Mutants accumulate danger differently (engine-relative)
 	danger_mult = is_stalker and (time_quant * 2) or danger_mult  -- Stalkers accumulate faster per quant
 
 	if is_mutant and cfg.scent and who and who:id() == db.actor:id() then  -- Scent: mutant smelling the bleeding actor
@@ -317,16 +339,22 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	end
 
 	local alarm = npc_alive and alarm_boost[npc:id()] and alarm_boost[npc:id()] > tg and 1.6 or 1  -- Alarmed NPC detects 1.6x faster while boosted
+
+	-- Proximity awareness: at point-blank range (< 6 m), detection increases sharply
+	local prox_boost = 1
+	if object_distance < 6 then
+		prox_boost = 1 + (6 - object_distance) * 0.75  -- 1m = 4.75x, 2m = 4.0x, 3m = 3.25x, 4m = 2.5x, 5m = 1.75x
+	end
 	
 --============== total =============================
 	local shot_mult = pewpewmult + (who and muzzle_t[who:id()] or 0)  -- Boost from the actor's shot / NPC muzzle flashes
-	local eq_dist = ((distance - object_distance / 1.15) / distance) * cfg.distance  -- Distance factor (close = high), MCM scaled
-	local lum_dist = (distance - object_distance / 1.35) / distance  -- Pure light-distance falloff
-	local Velocity = (1 + velocity_factor * velocity) * cfg.velocity  -- Movement visibility, MCM scaled
-	local wnj = wei * jacketmult * obj_dist_w * cfg.weight  -- Combined weight/outfit factor
+	local eq_dist = math.max(0, ((distance - object_distance / 1.15) / distance) * (cfg.distance or 1))  -- Distance factor (close = high), MCM scaled
+	local lum_dist = math.max(0, (distance - object_distance / 1.35) / distance)  -- Pure light-distance falloff
+	local Velocity = (1 + velocity_factor * velocity) * (cfg.velocity or 1)  -- Movement visibility, MCM scaled
+	local wnj = wei * jacketmult * obj_dist_w * (cfg.weight or 1)  -- Combined weight/outfit factor
 	local weight = wnj > 1 and wnj or 1               -- Minimum 1 (no weight penalty for light loads)
-	local Luminocity = (33 * luminocity * lum_dist + shot_mult) * cfg.luminocity  -- Final light + gunshot term, MCM scaled
-	local step_incr = Luminocity * Velocity * eq_dist * weight * crouch * danger_mult * camo_x * scheme_mult * comm_mult * nervous_squad_mult * adapt * glare * npc_nvg_mult * alarm + memory_factor + actor_marked  -- FINAL visibility increment for this engine call
+	local Luminocity = (40 * luminocity * lum_dist + shot_mult) * (cfg.luminocity or 1)  -- Final light + gunshot term, MCM scaled
+	local step_incr = math.max(0, Luminocity * Velocity * eq_dist * weight * crouch * danger_mult * camo_x * scheme_mult * comm_mult * nervous_squad_mult * adapt * glare * npc_nvg_mult * alarm * prox_boost + memory_factor + actor_marked)  -- FINAL visibility increment for this engine call
 --===============================================
 
 	if who and who:id() == db.actor:id() and npc_alive then  -- NPC evaluating the actor: track for the HUD
@@ -399,18 +427,24 @@ end
 
 --======== luminosity extra ====================
 function andruxa(animegif)
-	-- Convert an RGB vector to a single luminance scalar (perceived brightness weights)
-	return 0.21 * animegif.x + 0.72 * animegif.y + 0.07 * animegif.z
+	if not animegif then return 0.5 end
+	local x = animegif.x or 0.5
+	local y = animegif.y or 0.5
+	local z = animegif.z or 0.5
+	return 0.21 * x + 0.72 * y + 0.07 * z
 end
 
 function lights_lum(andre)
-	-- Global ambient light: the brighter of the sun and hemisphere light
-	local andlum = andre                             -- Optional override value
-	local andsun =  andruxa(weather.get_value_vector("sun_color"))  -- Luminance of the sun colour
-	local andhem = andruxa(weather.get_value_vector("hemisphere_color"))  -- Luminance of the hemisphere light
-	andlum = (math.max(andhem, andsun))              -- Use whichever is brighter
-
-	return andlum
+	if andre then return andre end
+	local andsun = 0.5
+	local andhem = 0.5
+	if weather and weather.get_value_vector then
+		local ok1, sun = pcall(weather.get_value_vector, "sun_color")
+		if ok1 and sun then andsun = andruxa(sun) end
+		local ok2, hem = pcall(weather.get_value_vector, "hemisphere_color")
+		if ok2 and hem then andhem = andruxa(hem) end
+	end
+	return math.max(andhem, andsun)
 end
 
 local purge_tmr = 0

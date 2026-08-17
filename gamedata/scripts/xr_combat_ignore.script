@@ -44,7 +44,7 @@ end
 local function on_game_load()
 	if (not alife_storage_manager.get_state().enable_warfare_mode) then
 		for i=1,#ignored_zone_list do
-			--ignored_zone[#ignored_zone+1] = ignored_zone_list[i] --Test
+			ignored_zone[#ignored_zone+1] = ignored_zone_list[i]  -- Populate the no-assault zones (was disabled during testing)
 		end
 	end
 end

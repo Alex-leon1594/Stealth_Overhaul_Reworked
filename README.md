@@ -1,4 +1,4 @@
-# Stealth_Overhaul_Reworked_v5.13
+# Stealth_Overhaul_Reworked_v5.14
 
 Complete stealth overhaul for **STALKER Anomaly** (GAMMA-compatible).
 Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full package of new stealth mechanics: noise, detection feedback, silent takedowns and a redesigned detection formula.
@@ -148,14 +148,14 @@ gamedata/textures/ui/lightgem/bar_noise_fill.dds White fill for the noise bar (t
 
 Fully compatible with the GAMMA Alife pack — no shared files, no callback conflicts:
 
-- **xlibs 1.8.5** — no interaction (library only).
-- **AlifePlus 1.8.7** — no interaction (NPC lifecycle management; this mod's ID-based registry tolerates its spawn/despawn churn).
+- **xlibs 1.8.5** — no interaction (library only; safe wrapper around `xcombat.disclose_enemy`).
+- **AlifePlus 1.8.7** — no interaction (NPC lifecycle management; this mod's ID-based registry and periodic 15 s memory purge tolerate its spawn/despawn churn).
 - **AlifeBalance 1.1.3** — no interaction (smart/squad balance only).
 - **AlifeGuard 1.3.1** — no interaction (NPC guarding/sanitizer).
 - **AlifeTactics 1.2.0** — designed-in coexistence:
-  - AT patches the winning `xr_danger` at runtime (function-level, on_game_start). This mod's `xr_danger.script`/`xr_danger.ltx` are the VFS winners and expose everything AT probes (`actid`, `DangerIgnoreActor`, the seven patched entry points), so AT's danger scheme runs on this mod's config values.
-  - **Hidden corpses** never trigger danger, even under AT: the suppression now lives in a global `npc_on_eval_danger` subscriber (`stealth_takedown.script`) that fires under vanilla, this mod's, or AT's danger evaluator.
-  - **Footstep noise**: when AT's movement-noise is enabled, hostile stalkers' footstep alerts are delegated to AT (no double `set_script_danger` stamping); this mod keeps its HUD noise bar, item-drop noise and monster alarms, and with the MCM `noise_hostile_only` option (default ON) only factions hostile to the actor react to footsteps. Toggle with the MCM `noise_handoff` option.
+  - AT patches the winning `xr_danger` at runtime (function-level, on_game_start). This mod's `xr_danger.script`/`mod_xr_danger_stealth.ltx` expose everything AT probes (`actid`, `DangerIgnoreActor`, the seven patched entry points), so AT's danger scheme runs on this mod's config values.
+  - **Hidden corpses** never trigger danger, even under AT: the suppression lives in a global `npc_on_eval_danger` subscriber (`stealth_takedown.script`) that fires under vanilla, this mod's, or AT's danger evaluator.
+  - **Footstep noise**: when AT's movement-noise is enabled (MCM `noise_handoff`, default ON), this mod cleanly delegates 100% of stalker footstep alerting to AT (`at_noise.script`), avoiding duplicate `set_script_danger` stamping and state conflicts; this mod keeps its HUD noise bar, item-drop noise and monster alarms.
   - **Hit-disclosure gate** (`stealth_noise.script`): AT's `at_disclosure` force-injects the shooter into the whole squad's memory on the first faction-enemy hit — even when nobody saw or heard the attack. This mod wraps `xcombat.disclose_enemy` (AT's only disclosure entry point, resolved live at call time) so that actor-initiated disclosures only go through when the squad member can actually see the actor or is already fighting him. NPC-vs-NPC disclosures and all non-actor callers pass through untouched; the return value is only used for counting in AT, so a suppressed disclosure breaks nothing. Toggle with the MCM `at_disclosure_gate` option (default ON).
   - AT's own `at_noise` handles reload/item-use sounds; this mod handles item drops — complementary.
 
@@ -168,6 +168,20 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
 - Outfit noise stats are read from the `noise_k` line in the outfit section (add it to any outfit to make it quieter/louder).
 
 ## Changelog
+
+### 2026-08-16 — v5.14: AlifeTactics 1.2.0 Full Integration, Point-Blank Vision Fix & Math Hardening
+- **Zero-Interference AlifeTactics 1.2.0 Integration (`stealth_noise.script`):** When `noise_handoff` is enabled (default ON) and AlifeTactics is detected, `stealth_noise.script` now cleanly skips all footstep `investigate()` calls, giving AlifeTactics (`at_noise.script` & `at_danger.script`) 100% exclusive authority over stalker footstep alerting and tactical search behavior without duplicate alert stamping or AI state conflicts. The HUD noise bar and item-drop sounds remain fully active.
+- **Vision Engine Responsiveness Calibration (`mod_m_stalker_stealth.ltx` & `mod_m_stalker_zombied_stealth.ltx`):**
+  - Calibrated `time_quant = 0.05` (was `0.5 - 1.0` which caused a 10x-20x artificial visual accumulation delay where NPCs would stare at the player point-blank for 15-30s without confirming visual contact).
+  - Re-tuned `visibility_threshold = 25.0` (free) and `20.0` (danger) for crisp, responsive visual target acquisition (0.5s - 1.5s at close range, 4s - 8s at distance).
+  - Restored `always_visible_distance = 0.15` (free) and `0.20` (danger) with `transparency_threshold = 0.85 / 0.75` for natural foliage and bush concealment.
+- **Close-Range Proximity Awareness & Luminosity Tuning (`visual_memory_manager.script`):**
+  - Added a dynamic proximity multiplier (`prox_boost = 1 + (6 - object_distance) * 0.75`) so enemies within 6 meters acquire direct line-of-sight targets exponentially faster, preventing visual blindness at point-blank range.
+  - Normalized `lumin_r2` (`/ 2.35`) and night curves for realistic lighting gradients across day/night cycles.
+  - Pre-populated `cfg` defaults and added safe guards to `lights_lum()` and `db.actor` queries against `nil` references.
+  - Added explicit `math.max(0, ...)` bounds to `eq_dist`, `lum_dist`, and `step_incr` to prevent distance falloff formulas from subtracting detection.
+- **Hidden Corpse Persistence Bug Fix (`stealth_takedown.script`):** Fixed a bug in the 30-second periodic corpse registry pruning where entries were checked against `stealth_noise.online_npcs[id]` (which only contains living NPCs), causing hidden corpses to lose their hidden status after 30 seconds. Pruning now checks `alife():object(id)`, ensuring corpses remain permanently hidden until deleted by the engine.
+- **Logging Module Robustness (`stealth_log.script`):** Corrected the module initialization and function export (`stealth_log = stealth_log or {}` and `function log(msg)`), ensuring that `stealth_overhaul.log` is reliably created and updated in `appdata/logs/`.
 
 ### 2026-08-15 — v5.13: DLTX Architecture, Memory Leak Prevention & Lifecycle Hardening
 - **Bug fix — `stealth_noise.script`:** The "BusyHands" error caused by the `compute_radius()` function was fixed; this function was attempting to read belt artifacts using:

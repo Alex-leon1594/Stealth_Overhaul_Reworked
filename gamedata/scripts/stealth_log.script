@@ -39,6 +39,8 @@ local function find_log_path()
 	return nil  -- No usable path -> logging silently disabled
 end
 
+stealth_log = stealth_log or {}
+
 function stealth_log.log(msg)
 	-- Append one timestamped line to the dedicated log file
 	if not (stealth_mcm and stealth_mcm.get_config) then return end  -- MCM module not ready
