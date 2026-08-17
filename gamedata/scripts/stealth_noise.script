@@ -223,6 +223,7 @@ function alarm_nearby(obj, radius, dur)
 	for id in pairs(stealth_noise.online_npcs) do    -- Loop over the registry
 		local npc = level.object_by_id(id)           -- Resolve the NPC
 		if npc and npc:alive() and IsStalker(npc) and not npc:has_info("npcx_is_companion") and not is_ally_of_actor(npc) then  -- Relevant hostile stalker
+			if obj:position():distance_to_sqr(npc:position()) < r2 then  -- Within alarm radius
 				visual_memory_manager.alarm_boost[id] = tg + dur  -- Boost their detection accumulation for the duration
 				suspect(npc, dur + 1000)             -- Mark them suspect a bit longer
 				investigate(npc, obj:position(), 2)  -- Send them to investigate at high alert
