@@ -39,6 +39,12 @@ local function is_ally_of_actor(npc)
 	return ok3 and my_squad ~= nil and my_squad == squad          -- Same squad as the actor = companion
 end
 
+local function is_hostile_to_actor(npc)
+	-- True when the NPC's engine relation to the actor is ENEMY (hostile only)
+	local ok, rel = pcall(function() return npc:relation(db.actor) end)
+	return ok and rel == game_object.enemy
+end
+
 local det_eye  -- The eye widget instance (created lazily by ensure_hud)
 
 local function ensure_hud()
@@ -111,7 +117,7 @@ function stealth_ui_update()
 				monster_seen[id] = nil -- Also remove from monster_seen if it was a monster
 			end
 		else
-			if IsStalker(obj) and obj:id() ~= AC_ID and not is_ally_of_actor(obj) then  -- Relevant hostile stalker
+			if IsStalker(obj) and obj:id() ~= AC_ID and is_hostile_to_actor(obj) and not (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(obj)) then  -- Relevant hostile stalker
 				local last_eval = visual_memory_manager.vis_last[id]  -- When this NPC last evaluated the actor
 				if last_eval and tg - last_eval > 250 then
 					-- The NPC is no longer being evaluated (left range / lost interest):

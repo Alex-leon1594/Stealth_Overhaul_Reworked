@@ -340,6 +340,61 @@ function npc_in_safe_zone(npc)
 	end
 	return false
 end
+
+function is_peaceful_npc(npc)
+	if not npc then return false end
+
+	-- 1. CLSID check (engine trader classes)
+	local ok, cls = pcall(function() return npc:clsid() end)
+	if ok and cls and (cls == clsid.trader or cls == clsid.script_trader) then
+		return true
+	end
+
+	-- 2. Community check
+	local comm = character_community(npc)
+	if comm == "trader" then
+		return true
+	end
+
+	local id = npc:id()
+	local st = db.storage[id]
+	if not st then return false end
+
+	-- 3. Storage / logic overrides checks
+	if st.overrides then
+		if st.overrides.no_combat_job then
+			return true
+		end
+		if st.overrides.combat_ignore and db.actor then
+			local cond = xr_logic.pick_section_from_condlist(db.actor, npc, st.overrides.combat_ignore.condlist)
+			if cond == "true" then
+				return true
+			end
+		end
+	end
+
+	-- 4. Active section logic check (e.g. animpoint with trader/mechanic/medic/barman or trade config)
+	if st.section_logic and (st.trade or string.find(st.section_logic, "trade") or string.find(st.section_logic, "mechanic") or string.find(st.section_logic, "medic") or string.find(st.section_logic, "barman") or string.find(st.section_logic, "bman") or string.find(st.section_logic, "guide")) then
+		return true
+	end
+
+	-- 5. Smart terrain job check
+	local smart = xr_gulag and xr_gulag.get_npc_smart and xr_gulag.get_npc_smart(npc)
+	local npc_info = smart and smart.npc_info and smart.npc_info[id]
+	if npc_info and npc_info.job then
+		local jt = npc_info.job.job_type or npc_info.job.section or ""
+		if npc_info.job.job_type_id == 1 or string.find(jt, "trader") or string.find(jt, "mechanic") or string.find(jt, "medic") or string.find(jt, "barman") or string.find(jt, "guide") then
+			return true
+		end
+	end
+
+	-- 6. Safe zone check
+	if npc_in_safe_zone(npc) then
+		return true
+	end
+
+	return false
+end
 ----------------------------------------------------------------------------------------------------------------------
 
 class "action_process_enemy"

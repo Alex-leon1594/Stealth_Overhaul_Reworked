@@ -131,12 +131,15 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	-- if it reaches visibility_threshold, the npc sees the object.
 	distance = distance <= 0 and 0.00001 or distance  -- Guard against division by zero in distance
 
-	-- Allies don't perceive the actor as a threat: they never accumulate
-	-- detection against him (eye icon, engine visibility state).
-	if db.actor and who and npc and who:id() == AC_ID and npc:id() ~= AC_ID and IsStalker(npc) and npc:alive() then  -- npc evaluating the actor (stalkers only: monsters have no goodwill -> GetAttitude crashes)
-		local ok, gw = pcall(function() return npc:general_goodwill(db.actor) end)  -- Read goodwill safely
-		if ok and gw and gw >= (game_relations and game_relations.FRIENDS or 1000) then
-			return 0  -- Friendly NPC: never detects the actor
+	-- Only hostile stalkers (enemies) accumulate stealth detection against the actor.
+	-- Neutrals, allies, and peaceful NPCs never accumulate detection unless they become hostile.
+	if db.actor and who and npc and who:id() == AC_ID and npc:id() ~= AC_ID and IsStalker(npc) and npc:alive() then  -- npc evaluating the actor
+		local ok, rel = pcall(function() return npc:relation(db.actor) end)
+		if not (ok and rel == game_object.enemy) then
+			return 0  -- Non-hostile NPC: never accumulates detection against the actor
+		end
+		if (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(npc)) then
+			return 0  -- Peaceful NPC: never accumulates detection
 		end
 	end
 

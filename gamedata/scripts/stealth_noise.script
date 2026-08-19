@@ -190,11 +190,11 @@ function investigate(npc, pos, level)
 	-- Send an NPC to investigate a position; level 1 = casual, level 2 = high alert
 	if not (npc and alive(npc) and IsStalker(npc)) then return end  -- Only alive stalkers
 	if npc:id() == AC_ID then return end            -- Never the actor
-	if is_ally_of_actor(npc) then return end        -- Allies never investigate
+	if not is_hostile_to_actor(npc) then return end  -- Neutrals and allies never investigate the player
 	if npc:has_info("npcx_is_companion") then return end  -- Companions don't investigate the player
 	if npc:best_enemy() then return end             -- Already fighting someone -> skip
 	if IsWounded(npc) or character_community(npc) == "zombied" then return end  -- Wounded/zombies ignore noises
-	if xr_combat_ignore.npc_in_safe_zone(npc) then return end  -- NPCs in safe zones never investigate
+	if (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(npc)) or (xr_combat_ignore and xr_combat_ignore.npc_in_safe_zone and xr_combat_ignore.npc_in_safe_zone(npc)) then return end  -- Traders/peaceful/safe-zone NPCs never investigate
 
 	level = level or 1                              -- Default alert level 1
 	if level >= 2 then
@@ -222,7 +222,7 @@ function alarm_nearby(obj, radius, dur)
 
 	for id in pairs(stealth_noise.online_npcs) do    -- Loop over the registry
 		local npc = level.object_by_id(id)           -- Resolve the NPC
-		if npc and npc:alive() and IsStalker(npc) and not npc:has_info("npcx_is_companion") and not is_ally_of_actor(npc) then  -- Relevant hostile stalker
+		if npc and npc:alive() and IsStalker(npc) and not npc:has_info("npcx_is_companion") and is_hostile_to_actor(npc) and not (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(npc)) then  -- Relevant hostile stalker
 			if obj:position():distance_to_sqr(npc:position()) < r2 then  -- Within alarm radius
 				visual_memory_manager.alarm_boost[id] = tg + dur  -- Boost their detection accumulation for the duration
 				suspect(npc, dur + 1000)             -- Mark them suspect a bit longer
@@ -411,15 +411,10 @@ function stealth_noise_update()
 	-- keep neutral-NPC investigation (AT only alerts hostiles).
 	for id in pairs(stealth_noise.online_npcs) do      -- Loop over all tracked NPCs
 		local npc = level.object_by_id(id)             -- Resolve the NPC
-		if npc and npc:alive() and IsStalker(npc) then  -- Alive stalker
+		if npc and npc:alive() and IsStalker(npc) and is_hostile_to_actor(npc) and not (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(npc)) then  -- Alive hostile stalker
 			local d2 = npc:position():distance_to_sqr(ap)  -- Squared distance to the actor
 			if d2 < r2 then                            -- Inside the noise sphere
-				local skip = false
-				if handoff and is_hostile_to_actor(npc) then
-					skip = true  -- Hostile footstep alerts delegated to AT
-				elseif stealth_mcm.get_config("noise_hostile_only") then
-					skip = not is_hostile_to_actor(npc)  -- Neutrals/friends ignore footsteps (MCM noise_hostile_only)
-				end
+				local skip = handoff                   -- Hostile footstep alerts delegated to AT when active
 				if not skip then
 					local alert_lvl = math.sqrt(d2) / radius < 0.45 and 2 or 1
 					investigate(npc, ap, alert_lvl)  -- Very close to the centre -> high alert, otherwise casual
@@ -436,7 +431,7 @@ function noise_at(pos, radius, alert_level)
 	local r2 = (radius or 10) ^ 2                       -- Squared radius (default 10 m)
 	for id in pairs(stealth_noise.online_npcs) do      -- Loop over the registry
 		local npc = level.object_by_id(id)             -- Resolve the NPC
-		if npc and npc:alive() and IsStalker(npc) and not npc:best_enemy() then  -- Alive stalker not already fighting
+		if npc and npc:alive() and IsStalker(npc) and not npc:best_enemy() and is_hostile_to_actor(npc) and not (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(npc)) then  -- Alive hostile stalker not already fighting
 			if npc:position():distance_to_sqr(pos) < r2 then  -- Within radius of the noise source
 				investigate(npc, pos, alert_level or 2)  -- Send them to investigate (default high alert)
 			end

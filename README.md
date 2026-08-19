@@ -1,4 +1,4 @@
-# Stealth_Overhaul_Reworked_v5.16
+# Stealth_Overhaul_Reworked_v5.17
 
 Complete stealth overhaul for **STALKER Anomaly** (GAMMA-compatible).
 Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full package of new stealth mechanics: noise, detection feedback, silent takedowns and a redesigned detection formula.
@@ -18,7 +18,7 @@ Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full
   - Noise scales with total weight, outfit `noise_k` stat, breathing (wounded / low stamina / bleeding), and is reduced by rain.
   - Artifacts alter your noise signature (e.g. `af_gravi` ×1.2, `af_fireball` ×1.3, `af_compass` ×0.75).
   - NPCs investigate noise (threat_danger logic / danger system) — subtle sounds make them curious, loud ones alert them.
-  - By default **only hostile factions** investigate your footsteps (MCM `noise_hostile_only`) — neutral NPCs no longer go on alert when you walk or run nearby. Item-drop noise and monster alarms still alert everyone (realistic reactions).
+  - By default **only hostile factions** investigate your noise and accumulate stealth vision — neutral and friendly NPCs ignore footsteps, item drops, and gunshot noise unless attacked and made hostile.
   - Dropping items makes noise (10 m).
 - **Squad alarm propagation** (`visual_memory_manager.script`)
   - When an NPC spots you, nearby squad members (within 200 m, MCM `squad_alert_range`) get an alarm boost (×1.6 detection, MCM `squad_alert_dur`).
@@ -168,6 +168,11 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
 - Outfit noise stats are read from the `noise_k` line in the outfit section (add it to any outfit to make it quieter/louder).
 
 ## Changelog
+
+### 2026-08-18 — v5.17: Hostility-Gated Detection, Peaceful NPC & Trader Alert Fixes
+- **Hostility-Gated Vision & Sound Detection (`visual_memory_manager.script`, `stealth_noise.script`, `stealth_ui.script`):** Gated all stealth vision accumulation (`get_visible_value`), footstep/movement/item noise investigation (`investigate`, `noise_at`, `alarm_nearby`), and HUD stealth eye calculation strictly to hostile enemies (`npc:relation(db.actor) == game_object.enemy`). Neutral and allied stalkers never accumulate visual stealth detection, never investigate player movement noise, and never trigger suspicion HUD states unless damaged and turned hostile.
+- **Trader & Peaceful NPC Protection (`xr_combat_ignore.script`):** Added centralized `is_peaceful_npc(npc)` helper checking engine CLSIDs (`clsid.trader`, `clsid.script_trader`), `"trader"` community, smart terrain non-combat jobs (trader, mechanic, medic, barman, guide), and logic overrides (`no_combat_job`, `combat_ignore`), permanently preserving their trading/dialogue stances when gunshots occur or the player moves near them.
+- **Gunshot Hearing Danger Refinement (`xr_danger.script`):** Refined `npc_on_hear_callback` so hearing weapon discharges (`WPN_hit`) only alerts stalkers if the shooter is an enemy (`npc:relation(who) >= 2`), eliminating false combat panics among friendly and neutral base inhabitants when shooting nearby. Direct damage hits (`npc_on_hit_callback`) still trigger immediate hostility and combat response.
 
 ### 2026-08-17 — v5.16: Engine Hardening, Nil-Guard Safety & Performance Optimization
 - **Nil-Pointer Safety & CTD Prevention (`xr_combat_ignore.script` & `xr_danger.script`):** Fixed critical engine crash vectors where `npc_on_hit_callback` and `npc_on_death_callback` attempted to read `who:id()` or `who:position()` when `who` was nil (e.g. non-entity environmental damage, anomalies, fall damage, or script-inflicted deaths).

@@ -49,6 +49,9 @@ end
 -----------------------------------------------------------------------------
 function set_script_danger(npc,time,who_id,pos)
 	if not (npc and npc.id) then return end
+	if (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(npc)) then
+		return
+	end
 	local id = npc:id()
 	if not script_danger[id] then
 		script_danger[id] = {}
@@ -104,7 +107,7 @@ local function npc_on_hear_callback(npc,who_id,s_type,dist,sound_power,sound_pos
 
 	--utils_data.debug_write("xr_danger:hear_callback",true)
 	
-	if (IsWounded(npc) or character_community(npc) == "zombied" or xr_combat_ignore.npc_in_safe_zone(npc)) then
+	if (IsWounded(npc) or character_community(npc) == "zombied" or (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(npc)) or (xr_combat_ignore and xr_combat_ignore.npc_in_safe_zone and xr_combat_ignore.npc_in_safe_zone(npc))) then
 		return
 	end
 	
@@ -122,7 +125,7 @@ local function npc_on_hear_callback(npc,who_id,s_type,dist,sound_power,sound_pos
 			return
 		end
 
-		if (who_id == AC_ID or npc:relation(who) >= 2) then
+		if (npc:relation(who) >= 2) then
 			set_script_danger(npc,7000,who_id,vec_set(sound_position))
 		end
 	end
@@ -189,7 +192,7 @@ local function is_danger(npc, best_danger)
 		return danger_in_radius(npc, best_danger, bd_type)
 	end
 
-	if xr_combat_ignore.npc_in_safe_zone(npc) then
+	if (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(npc)) or (xr_combat_ignore and xr_combat_ignore.npc_in_safe_zone and xr_combat_ignore.npc_in_safe_zone(npc)) then
 		return false
 	end
 
@@ -287,6 +290,9 @@ end
 
 local function eval_danger(self)
 	local npc = self.object
+	if (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(npc)) or (xr_combat_ignore and xr_combat_ignore.npc_in_safe_zone and xr_combat_ignore.npc_in_safe_zone(npc)) then
+		return false
+	end
 	local danger = npc:best_danger()
 
 	local flags = {ret_value = true}
@@ -738,6 +744,10 @@ function evaluator_check_danger:evaluate()
 	end 
 	
 	if (character_community(self.object) == "zombied") then
+		return false
+	end
+
+	if (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(self.object)) or (xr_combat_ignore and xr_combat_ignore.npc_in_safe_zone and xr_combat_ignore.npc_in_safe_zone(self.object)) then
 		return false
 	end
 
