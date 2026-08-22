@@ -62,6 +62,8 @@ local handoff_logged = false  -- One-time log flag for the AlifeTactics handoff
 
 local function alive(obj)
 	-- Safe alive check via pcall (the object may be destroyed/invalid)
+	if not obj or (type(obj) ~= "userdata" and type(obj) ~= "table") then return false end
+	if not (IsStalker(obj) or IsMonster(obj)) then return false end
 	local ok, res = pcall(function() return obj:alive() end)  -- Attempt the call
 	return ok and res                                         -- Return the result only on success
 end

@@ -9,7 +9,8 @@ local corpse_cleanup_timer = 0  -- Timestamp (ms) of the last corpse-registry cl
 
 local function alive(obj)
 	if not obj or (type(obj) ~= "userdata" and type(obj) ~= "table") then return false end
-	local ok, res = pcall(obj.alive, obj)
+	if not (IsStalker(obj) or IsMonster(obj)) then return false end
+	local ok, res = pcall(function() return obj:alive() end)
 	return ok and res
 end
 
@@ -23,7 +24,7 @@ local function on_eval_danger(npc, flags)
 	-- this mod's copy, or the AlifeTactics runtime patch): a hidden corpse
 	-- never triggers a danger reaction.
 	if not (flags and flags.ret_value ~= false and npc) then return end
-	if not alive(npc) then return end
+	if not (IsStalker(npc) and alive(npc)) then return end
 	local ok, danger = pcall(function() return npc:best_danger() end)
 	if not (ok and danger and danger:type() == danger_object.entity_corpse) then return end
 	local ok2, obj = pcall(function() return danger:object() end)
@@ -63,7 +64,7 @@ local function try_takedown()
 
 	for id in pairs(stealth_noise.online_npcs) do
 		local npc = level and level.object_by_id(id)
-		if npc and alive(npc) and IsStalker(npc) and npc:id() ~= AC_ID then
+		if npc and IsStalker(npc) and alive(npc) and npc:id() ~= AC_ID then
 			if npc:position():distance_to_sqr(ap) <= 4.84 then
 				if not npc:see(db.actor) and not npc:best_enemy() then
 					local st = db.storage[id]
@@ -151,7 +152,7 @@ function stealth_takedown_update()
 	local handled = {}
 
 	local function process_corpse(npc)
-		if not (npc and not alive(npc) and IsStalker(npc)) then return end
+		if not (npc and IsStalker(npc) and not alive(npc)) then return end
 		local id = npc:id()
 		local c = corpses[id]
 		if not (c and c.hidden) then
@@ -210,7 +211,7 @@ function load_state(m_data)
 	local restored = 0
 	for id, c in pairs(saved) do
 		local obj = level and level.object_by_id(id)  -- Resolve the corpse object
-		if obj and not alive(obj) then                -- Object still exists and is a corpse
+		if obj and IsStalker(obj) and not alive(obj) then                -- Object still exists and is a corpse
 			corpses[id] = c                            -- Restore the hidden entry
 			restored = restored + 1
 			pcall(function() obj:set_corpse_ready(false) end)  -- Not lootable (safe call)

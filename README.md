@@ -1,4 +1,4 @@
-# Stealth_Overhaul_Reworked_v5.17
+# Stealth_Overhaul_Reworked_v5.18
 
 Complete stealth overhaul for **STALKER Anomaly** (GAMMA-compatible).
 Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full package of new stealth mechanics: noise, detection feedback, silent takedowns and a redesigned detection formula.
@@ -168,6 +168,10 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
 - Outfit noise stats are read from the `noise_k` line in the outfit section (add it to any outfit to make it quieter/louder).
 
 ## Changelog
+
+### 2026-08-22 — v5.18: Luabind Member Access Fix & Non-Creature Entity Hardening
+- **Luabind Member Access Fix (`stealth_takedown.script`):** Fixed engine error spam (`! [LUA] CSciptEntity [physic_object/lights_hanging_lamp]: cannot access class member Alive!`) occurring when crouching near hanging lamps, lights, or physics props. Reordered spatial corpse evaluation in `process_corpse` to check `IsStalker(npc)` (which queries `clsid()` safely on all `CGameObject` instances) before checking `alive()`, discarding non-character objects returned by `level.iterate_nearest` without triggering unexposed Luabind class member lookups.
+- **Defensive Entity Guards Across All Modules (`stealth_takedown.script`, `stealth_ui.script`, `stealth_noise.script`, `visual_memory_manager.script`):** Hardened all local `alive(obj)` helpers and vision evaluator checks with explicit `if not (IsStalker(obj) or IsMonster(obj)) then return false end` guards and closure-wrapped `pcall(function() return obj:alive() end)`, guaranteeing complete crash and warning immunity when interacting with arbitrary level entities or physics objects.
 
 ### 2026-08-18 — v5.17: Hostility-Gated Detection, Peaceful NPC & Trader Alert Fixes
 - **Hostility-Gated Vision & Sound Detection (`visual_memory_manager.script`, `stealth_noise.script`, `stealth_ui.script`):** Gated all stealth vision accumulation (`get_visible_value`), footstep/movement/item noise investigation (`investigate`, `noise_at`, `alarm_nearby`), and HUD stealth eye calculation strictly to hostile enemies (`npc:relation(db.actor) == game_object.enemy`). Neutral and allied stalkers never accumulate visual stealth detection, never investigate player movement noise, and never trigger suspicion HUD states unless damaged and turned hostile.

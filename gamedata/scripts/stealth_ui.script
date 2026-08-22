@@ -22,6 +22,8 @@ end
 
 local function alive(obj)
 	-- Safe "is this object alive" check: pcall guards against dead objects
+	if not obj or (type(obj) ~= "userdata" and type(obj) ~= "table") then return false end
+	if not (IsStalker(obj) or IsMonster(obj)) then return false end
 	local ok, res = pcall(function() return obj:alive() end)  -- Try calling alive()
 	return ok and res                                         -- Return the result only if the call succeeded
 end

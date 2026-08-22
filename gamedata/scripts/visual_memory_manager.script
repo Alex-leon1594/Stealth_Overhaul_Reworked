@@ -216,7 +216,7 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	local crouch = (cr and (not acc)) and (cfg.crouch) or 1  -- Crouched standing still: reduced detection
 	crouch = (cr and acc) and (cfg.low_crouch) or crouch  -- Crouch + movement: even lower
 
-	local npc_alive = npc and npc:alive()            -- The evaluating NPC is alive
+	local npc_alive = npc and (IsStalker(npc) or IsMonster(npc)) and npc:alive()            -- The evaluating NPC is alive
 	local is_mutant = npc_alive and IsMonster(npc)   -- The NPC is a mutant
 	local is_stalker = npc_alive and IsStalker(npc)  -- The NPC is a stalker
 	local danger_mult = 1.0                          -- Normalized base multiplier (decoupled from time_quant to prevent formula collapse)
