@@ -111,6 +111,12 @@ local function squad_is_nervous(squad_id)
 	return false
 end
 
+local function is_hostile_to_actor(npc)
+	if not (npc and db.actor) then return false end
+	local ok, rel = pcall(function() return npc:relation(db.actor) end)
+	return ok and rel == game_object.enemy
+end
+
 local community_mult = {  -- Perception multiplier per faction
 	["army"]		= 1.3,   -- Army: sharpest eyes
 	["military"]	= 1.3,
@@ -130,18 +136,6 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	-- (npc, who) pair. The returned value is ADDED to the npc's visibility;
 	-- if it reaches visibility_threshold, the npc sees the object.
 	distance = distance <= 0 and 0.00001 or distance  -- Guard against division by zero in distance
-
-	-- Only hostile stalkers (enemies) accumulate stealth detection against the actor.
-	-- Neutrals, allies, and peaceful NPCs never accumulate detection unless they become hostile.
-	if db.actor and who and npc and who:id() == AC_ID and npc:id() ~= AC_ID and IsStalker(npc) and npc:alive() then  -- npc evaluating the actor
-		local ok, rel = pcall(function() return npc:relation(db.actor) end)
-		if not (ok and rel == game_object.enemy) then
-			return 0  -- Non-hostile NPC: never accumulates detection against the actor
-		end
-		if (xr_combat_ignore and xr_combat_ignore.is_peaceful_npc and xr_combat_ignore.is_peaceful_npc(npc)) then
-			return 0  -- Peaceful NPC: never accumulates detection
-		end
-	end
 
 --============= luminosity =============
 	local npcxnpc_flash = cfg.npc_flash	-- Boosts NPC vision when they see another NPC with an active flashlight from afar (configurable via MCM; off by default due to potential FPS impact)
@@ -271,7 +265,7 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 			-- First time the NPC sees the actor -> record it and possibly alert squadmates
 			vision_memory[npc:id()] = {}             -- Create the inner table
 			vision_memory[npc:id()][who:id()] = true -- Mark the sighting
-			if who:id() == AC_ID and IsStalker(npc) then  -- Actor was seen by a stalker
+			if who:id() == AC_ID and IsStalker(npc) and is_hostile_to_actor(npc) then  -- Actor was seen by a hostile stalker
 				stealth_log.log(string.format("Player spotted by %s (ID %d, %s, %s) at distance %.1fm", npc:character_name() or npc:name(), npc:id(), character_community(npc) or "unknown", (ranks and ranks.get_obj_rank_name and ranks.get_obj_rank_name(npc)) or "unknown", object_distance), "VISION")
 				local squad_alert_range = cfg.squad_alert_range  -- MCM: squad alert radius (0 = off)
 				local squad_alert_dur = cfg.squad_alert_dur      -- MCM: squad alert duration
@@ -364,7 +358,7 @@ function get_visible_value(npc,who,time_delta,time_quant,luminocity,velocity_fac
 	local step_incr = math.max(0, Luminocity * Velocity * eq_dist * weight * crouch * danger_mult * camo_x * scheme_mult * comm_mult * nervous_squad_mult * adapt * glare * npc_nvg_mult * alarm * prox_boost + memory_factor + actor_marked)  -- FINAL visibility increment for this engine call
 --===============================================
 
-	if who and who:id() == db.actor:id() and npc_alive then  -- NPC evaluating the actor: track for the HUD
+	if who and who:id() == db.actor:id() and npc_alive and is_hostile_to_actor(npc) then  -- Hostile NPC evaluating the actor: track for the HUD
 		local nid = npc:id()                           -- NPC id
 		local thr = npc:visibility_threshold()         -- Their detection threshold
 		if npc:see(who) then
