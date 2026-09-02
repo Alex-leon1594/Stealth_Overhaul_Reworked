@@ -179,6 +179,7 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
   - Preserved `ignored_zone_list` in `on_game_load` so safe zones (Skadovsk, Yanov) correctly suppress combat.
   - Fixed an upstream typo from Anti-Lag in the Cordon faction check (`comm == "stalker" and comm == "army"` → `comm == "stalker" and ene_comm == "army"`).
   - Retained comprehensive nil-pointer guards on `who` in `npc_on_hit_callback`.
+- **Noise Bar Hotkey State Persistence (`light_gem.script`):** Fixed an issue where toggling off the footstep noise bar via hotkey (default F8) was forgotten upon level transitions or reloading a save game. The keybind toggle now directly updates MCM configuration (`ui_mcm.set`), persists across save games via `save_state`/`load_state`, and no longer gets reset to enabled by `actor_on_first_update` when switching maps.
 
 ### 2026-08-22 — v5.18: Luabind Member Access Fix & Non-Creature Entity Hardening
 - **Luabind Member Access Fix (`stealth_takedown.script`):** Fixed engine error spam (`! [LUA] CSciptEntity [physic_object/lights_hanging_lamp]: cannot access class member Alive!`) occurring when crouching near hanging lamps, lights, or physics props. Reordered spatial corpse evaluation in `process_corpse` to check `IsStalker(npc)` (which queries `clsid()` safely on all `CGameObject` instances) before checking `alive()`, discarding non-character objects returned by `level.iterate_nearest` without triggering unexposed Luabind class member lookups.

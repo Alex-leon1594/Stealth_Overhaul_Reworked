@@ -49,7 +49,6 @@ function upd_hud()
 	-- Called when the "icon" option or any other option changes in MCM
 	-- enable/disable icon
 	update_mcm_cache() -- Refresh the settings cache
-	noise_bar_override = nil  -- Any MCM change resets the keybind override (the checkbox regains control)
 	if cfg.icon then
 		activate_hud()     -- Icon enabled -> make sure the HUD dialog exists
 		stealth_log.log("HUD icon: enabled (mode " .. (cfg.icon_type or 1) .. ")", "HUD")
@@ -61,11 +60,18 @@ function upd_hud()
 	-- if icon enabled then update its type
 	if HUD ~= nil then
 		icon_mode = cfg.icon_type  -- Cache the newly selected mode
-		reset_hud()                                       -- Recreate the dialog so the new type takes effect
+		reset_hud()                -- Recreate the dialog so the new type takes effect
 	end
 end
 
--- Keybind override for the noise bar (MCM `noise_bar_key`, default F7).
+local function on_option_change()
+	update_mcm_cache()
+	-- When options are saved via the MCM menu, sync the override with the checkbox
+	noise_bar_override = cfg.noise_bar
+	upd_hud()
+end
+
+-- Keybind override for the noise bar (MCM `noise_bar_key`, default F8).
 function noise_bar_visible()
 	-- Effective noise-bar visibility: the keybind override when set, else the MCM option
 	if noise_bar_override ~= nil then return noise_bar_override end
@@ -81,24 +87,52 @@ function on_key_press(key)
 	if not (db.actor and db.actor:alive()) then return end  -- No live actor
 	if db.actor:is_talking() then return end  -- Blocked during conversations
 
-	if noise_bar_override == nil then
-		noise_bar_override = not (cfg.noise_bar == true)  -- First press flips the MCM state
-	else
-		noise_bar_override = not noise_bar_override  -- Later presses flip the override
+	local new_state = not noise_bar_visible()
+	noise_bar_override = new_state
+	cfg.noise_bar = new_state
+
+	-- Persist to MCM configuration file (axr_options.ltx) so it survives restarts/transitions
+	if ui_mcm and ui_mcm.set then
+		pcall(ui_mcm.set, "stealth/noise_bar", new_state)
 	end
 
-	local msg = noise_bar_override and "ui_st_stealth_noise_bar_on" or "ui_st_stealth_noise_bar_off"  -- Localized tip string
+	-- Immediate visual update if HUD is active
+	if HUD and HUD.noise then
+		HUD.noise:Show(new_state and cfg.noise and main_hud_shown())
+	end
+
+	local msg = new_state and "ui_st_stealth_noise_bar_on" or "ui_st_stealth_noise_bar_off"  -- Localized tip string
 	pcall(function() actor_menu.set_msg(1, game.translate_string(msg), 3) end)  -- HUD tip (safe)
-	stealth_log.log("Noise bar keybind: " .. (noise_bar_override and "ON" or "OFF"), "HUD")
+	stealth_log.log("Noise bar keybind: " .. (new_state and "ON" or "OFF"), "HUD")
+end
+
+function save_state(m_data)
+	if not m_data then return end
+	m_data.stealth_noise_bar_override = (noise_bar_override ~= nil) and noise_bar_override or cfg.noise_bar
+end
+
+function load_state(m_data)
+	if not m_data then return end
+	if m_data.stealth_noise_bar_override ~= nil then
+		noise_bar_override = m_data.stealth_noise_bar_override
+		cfg.noise_bar = noise_bar_override
+	end
 end
 
 function on_game_start()
-	-- Wire up the callbacks: run once on the actor's first update and on every MCM option change
+	-- Wire up the callbacks: run once on the actor's first update, save/load, and on every MCM option change
+	RegisterScriptCallback("save_state", save_state)
+	RegisterScriptCallback("load_state", load_state)
 	RegisterScriptCallback("actor_on_first_update", function()
 		update_mcm_cache()
+		if noise_bar_override == nil then
+			noise_bar_override = cfg.noise_bar
+		else
+			cfg.noise_bar = noise_bar_override
+		end
 		upd_hud()
 	end)
-	RegisterScriptCallback("on_option_change", upd_hud)
+	RegisterScriptCallback("on_option_change", on_option_change)
 	RegisterScriptCallback("on_key_press", on_key_press)  -- Hotkey: toggle the noise bar
 end
 
