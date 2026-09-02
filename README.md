@@ -1,4 +1,4 @@
-# Stealth_Overhaul_Reworked_v5.18
+# Stealth_Overhaul_Reworked_v5.19
 
 Complete stealth overhaul for **STALKER Anomaly** (GAMMA-compatible).
 Based on the classic addon **«Stealth 2.0.1»** (by xcvb), extended with a full package of new stealth mechanics: noise, detection feedback, silent takedowns and a redesigned detection formula.
@@ -121,7 +121,7 @@ gamedata/scripts/
 ├── visual_memory_manager.script  Core detection formula (overrides Stealth 2.0.1), campfire lighting
 ├── trans_outfit.script           Empty stub for `timer_trans` (bind_stalker compatibility)
 ├── xr_danger.script              Danger system, actor-related dangers
-├── xr_combat_ignore.script       Safe-zone fix
+├── xr_combat_ignore.script       Safe-zone fix, peaceful NPC protection, early distance optimization
 └── stealth_mcm.script            MCM options
 
 gamedata/configs/
@@ -158,6 +158,9 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
   - **Footstep noise**: when AT's movement-noise is enabled (MCM `noise_handoff`, default ON), this mod cleanly delegates 100% of stalker footstep alerting to AT (`at_noise.script`), avoiding duplicate `set_script_danger` stamping and state conflicts; this mod keeps its HUD noise bar, item-drop noise and monster alarms.
   - **Hit-disclosure gate** (`stealth_noise.script`): AT's `at_disclosure` force-injects the shooter into the whole squad's memory on the first faction-enemy hit — even when nobody saw or heard the attack. This mod wraps `xcombat.disclose_enemy` (AT's only disclosure entry point, resolved live at call time) so that actor-initiated disclosures only go through when the squad member can actually see the actor or is already fighting him. NPC-vs-NPC disclosures and all non-actor callers pass through untouched; the return value is only used for counting in AT, so a suppressed disclosure breaks nothing. Toggle with the MCM `at_disclosure_gate` option (default ON).
   - AT's own `at_noise` handles reload/item-use sounds; this mod handles item drops — complementary.
+- **Anti-Lag for GAMMA v0.37+** — fully integrated & enhanced:
+  - Both mods include `xr_combat_ignore.script`. This mod integrates Anti-Lag's early distance exit optimization directly into its own logic, eliminating expensive callbacks and memory calls on distant targets while retaining full peaceful NPC protection (`is_peaceful_npc`), safe zones (`ignored_zone_list`), and safety nil checks.
+  - In Mod Organizer 2, place **Stealth Overhaul Reworked** below (higher priority than) **Anti-Lag for GAMMA** so this enhanced script takes effect.
 
 > **Note:** mods that ship their own `visual_memory_manager.script` (e.g. *NPC's can't see through foliage 1.8.2 DLTX*, GAMMA's Atmospherics/Stealth Crash Fix) are mutually exclusive with this mod's copy — give this mod higher priority in MO2. The foliage vision itself works via DLTX configs and is unaffected.
 
@@ -168,6 +171,14 @@ Fully compatible with the GAMMA Alife pack — no shared files, no callback conf
 - Outfit noise stats are read from the `noise_k` line in the outfit section (add it to any outfit to make it quieter/louder).
 
 ## Changelog
+
+### 2026-09-02 — v5.19: Anti-Lag Compatibility & Combat Evaluation Optimization
+- **Early-Exit Combat Distance Optimization (`xr_combat_ignore.script`):** Reordered `is_enemy()` evaluation to check native distance constraints (stalker vs military in Cordon, night/rain 100 m limit vs actor, vertical > 30 m and 70 m limit vs monsters, and distant stalker vs stalker thresholds) at the very top of the function. Discarding out-of-range targets immediately skips expensive callbacks (`on_enemy_eval`), bribe checks (`xr_bribe`), memory queries, and safe-zone polygon evaluations across frames, saving CPU cycles in heavily populated scenes.
+- **Anti-Lag for GAMMA Compatibility & Fixes (`xr_combat_ignore.script`):** Integrated the performance optimizations from *Anti-Lag for GAMMA v0.37* directly while maintaining full compatibility:
+  - Preserved `is_peaceful_npc(npc)` ensuring traders, barmen, mechanics, and medics remain fully protected from false danger reactions and combat panics.
+  - Preserved `ignored_zone_list` in `on_game_load` so safe zones (Skadovsk, Yanov) correctly suppress combat.
+  - Fixed an upstream typo from Anti-Lag in the Cordon faction check (`comm == "stalker" and comm == "army"` → `comm == "stalker" and ene_comm == "army"`).
+  - Retained comprehensive nil-pointer guards on `who` in `npc_on_hit_callback`.
 
 ### 2026-08-22 — v5.18: Luabind Member Access Fix & Non-Creature Entity Hardening
 - **Luabind Member Access Fix (`stealth_takedown.script`):** Fixed engine error spam (`! [LUA] CSciptEntity [physic_object/lights_hanging_lamp]: cannot access class member Alive!`) occurring when crouching near hanging lamps, lights, or physics props. Reordered spatial corpse evaluation in `process_corpse` to check `IsStalker(npc)` (which queries `clsid()` safely on all `CGameObject` instances) before checking `alive()`, discarding non-character objects returned by `level.iterate_nearest` without triggering unexposed Luabind class member lookups.

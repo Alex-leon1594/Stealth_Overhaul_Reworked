@@ -84,6 +84,62 @@ function is_enemy(obj,enemy,no_memory)
 		return false 
 	end
 	
+	local ene_id = enemy:id()
+	local id = obj:id()
+
+	-- Native Distance & Environmental Constraints (Early Exit for Performance)
+	local pos1 = obj:position()
+	local pos2 = enemy:position()
+	local is_actor = (ene_id == AC_ID)
+	local is_monster = character_community(enemy) == "zombied" or IsMonster(enemy)
+
+	local comm = character_community(obj)
+	local ene_comm = character_community(enemy)
+	if ((comm == "army" and ene_comm == "stalker") or (comm == "stalker" and ene_comm == "army")) then 
+		-- In Cordon prevent stalker v military combat with distances greater than 60m
+		if (level.name() == "l01_escape" and pos1:distance_to_sqr(pos2) >= 3600) then
+			return false
+		end
+	end
+
+	if (is_actor) then
+		if (level.get_time_hours() < 4 or level.get_time_hours() > 19 or level.rain_factor() >= 0.4) and (pos1:distance_to_sqr(pos2) > 10000) then 
+			-- limit combat range to 100m during night hours or heavy rain for stalker v actor
+			return false
+		end
+	elseif (is_monster) then
+		if (math.abs(pos1.y - pos2.y) > 30) then
+			-- prevent stalker from attack mutants under ground or above ground
+			return false 
+		end
+		if (pos1:distance_to_sqr(pos2) > 4900) then
+			-- ignore monsters 70m or greater
+			return false
+		end
+	else
+		local dist = pos1:distance_to_sqr(pos2)
+		if (dist > 10000) then -- 100m max combat range for stalker v stalker
+			return false
+		end
+		if (dist > 5625) and (level.rain_factor() > 0 or level.get_time_hours() < 4 or level.get_time_hours() > 19) then 
+			-- limit combat range to 75m during night hours for stalker v stalker or rain
+			return false
+		end
+		if (dist > 3600) then
+			-- limit combat range to 60m during heavy rain, surges or if they are story related
+			if (xr_conditions.surge_started() or level.rain_factor() >= 0.5 or get_object_story_id(id) or get_object_story_id(ene_id)) then 
+				return false
+			end
+			
+			local squad = get_object_squad(obj)
+			local ene_squad = get_object_squad(enemy)
+			
+			if (squad and get_object_story_id(squad.id) or ene_squad and get_object_story_id(ene_squad.id)) then 
+				return false
+			end
+		end
+	end
+
 	if (obj:critically_wounded()) then 
 		return true 
 	end
@@ -93,8 +149,6 @@ function is_enemy(obj,enemy,no_memory)
 	
 	if flags.override then return flags.result end
 	
-	local ene_id = enemy:id()
-	local id = obj:id()
 	local st = db.storage[id]
 	
 	if (DEV_DEBUG) then
@@ -148,9 +202,6 @@ function is_enemy(obj,enemy,no_memory)
 			end
 		end
 	else
-		
-		local is_actor = (ene_id == AC_ID)
-		
 		-- Ignore enemies during surge, only if npc has a surge job at a smart_terrain and the enemy is greater then 25m (actor 100m) away from the npc's surge job's alife_task position
 		if (xr_conditions.surge_started) then 
 			local smart = xr_gulag.get_npc_smart(obj)
@@ -171,11 +222,9 @@ function is_enemy(obj,enemy,no_memory)
 		end
 		
 		local sim = alife()
-		local is_monster = character_community(enemy) == "zombied" or IsMonster(enemy)
 		
 		-- Ignore enemies with the safe_zone flag
 		if (is_actor ~= true) then
-		
 			-- ignore hostages
 			if (axr_task_manager.hostages_by_id[ene_id]) then
 				return true 
@@ -216,57 +265,6 @@ function is_enemy(obj,enemy,no_memory)
 							return false
 						end
 					end
-				end
-			end
-		end
-
-		--Ignore by distance; mainly unrestricted for all non-story stalker vs. stalker combat
-		local pos1 = obj:position()
-		local pos2 = enemy:position()
-		
-		local comm = character_community(obj)
-		local ene_comm = character_community(enemy)
-		if (comm == "army" and ene_comm == "stalker") or (comm == "stalker" and ene_comm == "army") then 
-			-- In Cordon prevent stalker v military combat with distances greater than 60m
-			if (level.name() == "l01_escape" and pos1:distance_to_sqr(pos2) >= 3600) then
-				return false
-			end
-		end
-
-		if (is_actor) then
-			if (level.get_time_hours() < 4 or level.get_time_hours() > 19 or level.rain_factor() >= 0.4) and (pos1:distance_to_sqr(pos2) > 10000) then 
-				-- limit combat range to 100m during night hours or heavy rain for stalker v actor
-				return false
-			end
-		elseif (is_monster) then
-			if (math.abs(pos1.y-pos2.y) > 30) then
-				-- prevent stalker from attack mutants under ground or above ground
-				return false 
-			end
-			if (pos1:distance_to_sqr(pos2) > 4900) then
-				-- ignore monsters 70m or greater
-				return false
-			end
-		else
-			local dist = pos1:distance_to_sqr(pos2)
-			if (dist > 10000) then -- 100m max combat range for stalker v stalker
-				return false
-			end
-			if (dist > 5625) and (level.rain_factor() > 0 or level.get_time_hours() < 4 or level.get_time_hours() > 19) then 
-				-- limit combat range to 75m during night hours for stalker v stalker or rain
-				return false
-			end
-			if (dist > 3600) then
-				-- limit combat range to 60m during heavy rain, surges or if they are story related
-				if (xr_conditions.surge_started() or level.rain_factor() >= 0.5 or get_object_story_id(id) or get_object_story_id(ene_id)) then 
-					return false
-				end
-				
-				local squad = get_object_squad(obj)
-				local ene_squad = get_object_squad(enemy)
-				
-				if (squad and get_object_story_id(squad.id) or ene_squad and get_object_story_id(ene_squad.id)) then 
-					return false
 				end
 			end
 		end
